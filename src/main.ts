@@ -1,5 +1,6 @@
 import '@fontsource-variable/fraunces/wght.css';
 import './style.css';
+import { App as NativeApp } from '@capacitor/app';
 import type { HistoryEntry, ProductData, Profile, Verdict } from './types';
 import { computeVerdict } from './engine/verdict';
 import { bandFor, computeScore, fmt } from './engine/score';
@@ -84,7 +85,12 @@ let keyDraft = '';
 
 const app = document.getElementById('app')!;
 
+/** True inside the Android / iOS store build (the app shell provides window.Capacitor). */
+const isNativeApp = () =>
+  !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+
 const isStandalone = () =>
+  isNativeApp() ||
   window.matchMedia('(display-mode: standalone)').matches ||
   (navigator as unknown as { standalone?: boolean }).standalone === true;
 const isIos = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
@@ -111,11 +117,13 @@ function profileSummary(p: Profile): string {
   return profileParts(p).join(' · ');
 }
 
-function go(next: View, keepNotice = false) {
+function go(next: View, keepNotice = false, fromBackButton = false) {
   stopScanner();
   if (!keepNotice) notice = null;
   deleteArmed = false;
   view = next;
+  // Each screen is a history entry, so the phone's Back button steps back through the app instead of closing it.
+  if (!fromBackButton && history.state?.view !== next) history.pushState({ view: next }, '');
   render();
   window.scrollTo(0, 0);
 }
@@ -865,7 +873,31 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+window.addEventListener('popstate', (ev) => {
+  const target = (ev.state as { view?: View } | null)?.view ?? 'scan';
+  const allowed = (target !== 'welcome' || onboarding) && (target !== 'result' || current !== null);
+  go(allowed ? target : 'scan', false, true);
+});
+history.replaceState({ view }, '');
+
+// Android's Back button in the store build: close the camera, else step back a screen, else leave the app.
+if (isNativeApp()) {
+  void NativeApp.addListener('backButton', () => {
+    if (scanning) {
+      stopScanner();
+      render();
+    } else if (view === 'scan' || view === 'welcome') {
+      void NativeApp.exitApp();
+    } else if (history.state?.view && history.length > 1) {
+      history.back();
+    } else {
+      go('scan', false, true);
+    }
+  });
+}
+
+// The store build ships its files inside the app, so it needs no offline worker.
+if (import.meta.env.PROD && 'serviceWorker' in navigator && !isNativeApp()) {
   void navigator.serviceWorker.register('./sw.js').catch(() => undefined);
 }
 
