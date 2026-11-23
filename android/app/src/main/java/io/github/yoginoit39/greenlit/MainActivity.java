@@ -1,4 +1,4 @@
-package io.github.yoginoit39.safeforme;
+package io.github.yoginoit39.greenlit;
 
 import com.getcapacitor.BridgeActivity;
 

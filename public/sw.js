@@ -1,6 +1,6 @@
 // Offline support: caches the app's own files only. Product lookups and label
 // photos always go straight to the network and are never stored here.
-const CACHE = 'safeforme-v1';
+const CACHE = 'greenlit-v1';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

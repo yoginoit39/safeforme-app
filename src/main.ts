@@ -347,7 +347,7 @@ function installCard(): string {
   if (!installEvent && !isIos()) return '';
   return `<section class="card install">
     <div>
-      <strong>Keep SafeForMe one tap away</strong>
+      <strong>Keep Greenlit one tap away</strong>
       <p class="hint">${installEvent
         ? 'Add it to your home screen. Opens like an app, works offline.'
         : 'Tap the Share button, then “Add to Home Screen”. Opens like an app.'}</p>
@@ -602,10 +602,10 @@ function settingsView(): string {
     : `<section class="card">
         <h2>Home screen</h2>
         <p class="hint">${installEvent
-          ? 'Add SafeForMe to your home screen. It opens like an app and works offline.'
+          ? 'Add Greenlit to your home screen. It opens like an app and works offline.'
           : isIos()
             ? 'In Safari, tap the Share button, then “Add to Home Screen”. It opens like an app.'
-            : 'Use your browser menu → “Add to Home screen” / “Install app” to open SafeForMe like an app.'}</p>
+            : 'Use your browser menu → “Add to Home screen” / “Install app” to open Greenlit like an app.'}</p>
         ${installEvent ? '<button class="btn" data-action="install">Add to home screen</button>' : ''}
       </section>`;
   return `
@@ -730,7 +730,7 @@ function render() {
   const activeTab = view === 'result' ? 'scan' : view === 'key' ? 'settings' : view;
   const chrome = !onboarding;
   app.innerHTML = `
-    ${view === 'welcome' ? '' : `<header class="top"><span class="logo-mark">${icon('check')}</span><span class="logo">SafeForMe</span></header>`}
+    ${view === 'welcome' ? '' : `<header class="top"><span class="logo-mark">${icon('check')}</span><span class="logo">Greenlit</span></header>`}
     <main class="view view--${view} ${chrome ? '' : 'view--bare'}">${body}</main>
     ${chrome
       ? `<nav class="nav" aria-label="Main">

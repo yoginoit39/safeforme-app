@@ -1,7 +1,7 @@
 {
   "id": "./",
-  "name": "SafeForMe",
-  "short_name": "SafeForMe",
+  "name": "Greenlit",
+  "short_name": "Greenlit",
   "description": "Scan food. See if it is safe for you, with a personal health score.",
   "lang": "en",
   "dir": "ltr",

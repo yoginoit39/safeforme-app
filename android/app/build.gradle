@@ -1,10 +1,10 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace = "io.github.yoginoit39.safeforme"
+    namespace = "io.github.yoginoit39.greenlit"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "io.github.yoginoit39.safeforme"
+        applicationId "io.github.yoginoit39.greenlit"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

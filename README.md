@@ -1,4 +1,4 @@
-# SafeForMe (working name)
+# Greenlit (working name)
 
 Scan a food product, get a personal safety verdict and a personal 0–100 score.
 Static web app: no backend, no accounts, no tracking. Everything stays in the browser.

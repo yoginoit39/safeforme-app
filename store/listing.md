@@ -3,7 +3,7 @@
 Paste these into Play Console. Name is still the working name.
 
 ## App name (max 30)
-SafeForMe: Food Scanner
+Greenlit: Food Scanner
 
 ## Short description (max 80)
 Scan food. See if it's safe for your allergies, diet and health goals.
@@ -11,7 +11,7 @@ Scan food. See if it's safe for your allergies, diet and health goals.
 ## Full description (max 4000)
 Is this food safe for YOU?
 
-Most food scanners give everyone the same score. SafeForMe gives you an answer made for you.
+Most food scanners give everyone the same score. Greenlit gives you an answer made for you.
 
 Tell it once what to watch for — allergies, halal, kosher, vegan, vegetarian, pregnancy, diabetes, low salt, or a goal like losing weight. Then scan any barcode and get two answers in a second:
 
@@ -36,7 +36,7 @@ FREE
 Barcode scanning is free and unlimited.
 
 IMPORTANT
-SafeForMe is an information tool, not a medical device, and does not give medical advice. Product data comes from Open Food Facts, a volunteer-run database, and can be incomplete or wrong. Always read the physical label before eating, especially if you have an allergy or a medical condition.
+Greenlit is an information tool, not a medical device, and does not give medical advice. Product data comes from Open Food Facts, a volunteer-run database, and can be incomplete or wrong. Always read the physical label before eating, especially if you have an allergy or a medical condition.
 
 Product data: Open Food Facts (ODbL).
 
