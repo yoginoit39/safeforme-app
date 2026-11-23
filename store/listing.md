@@ -52,7 +52,7 @@ Food & Drink (alternative: Health & Fitness)
 - Privacy policy URL: https://yoginoit39.github.io/safeforme-app/privacy.html
 - Ads: No
 - App access: all features available without login
-- Data safety: no data collected or shared by the developer. Note for the form: barcode numbers go to Open Food Facts and optional label photos go to Google under the user's own key, both sent straight from the device, not to the developer.
+- Data safety (cautious version, recommended): "Does your app collect or share user data?" Yes. Encrypted in transit: Yes. Account creation: none. Data type: Photos and videos > Photos — Collected: yes; Shared: no; Processed ephemerally: yes; Optional: yes (user can choose); Purpose: App functionality. Nothing else: the profile, history and key never leave the phone, and barcode numbers are not personal data. Why not "No data collected": a label photo does leave the device (to Google's AI, with the user's own key), and Google's form counts data sent off the device even when the developer never receives it.
 - Health apps declaration: Nutrition and Weight Management; not a medical device
 - Target audience: 13+ (not designed for children)
 - Content rating questionnaire: no violence, no user-generated content, no sharing of location
