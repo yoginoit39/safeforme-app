@@ -380,3 +380,6 @@ legend { font-family: var(--display); font-weight: 700; font-size: 1.3rem; lette
 .steps form .row { flex-wrap: nowrap; }
 .steps form .btn--small { background: var(--ink); color: var(--bg); min-height: 52px; }
 .steps input { background: var(--bg) !important; }
+
+/* quiet alternative under the photo button */
+.photo-alt { align-self: center; margin-top: -8px; font-size: 0.88rem; font-weight: 600; color: var(--muted); }

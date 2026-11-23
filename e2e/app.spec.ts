@@ -186,7 +186,26 @@ test('label photo with a key → verdict; key only goes to Google', async ({ pag
   await open(page, info);
   // a real (tiny) PNG, as if taken by the camera
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC', 'base64');
-  await page.locator('#photo-input').setInputFiles({ name: 'label.png', mimeType: 'image/png', buffer: png });
+  const label = { name: 'label.png', mimeType: 'image/png', buffer: png };
+  // Press the real button on the home screen and answer the file chooser it opens.
+  let chooser = page.waitForEvent('filechooser');
+  await page.locator('.view--scan [data-action="photo"]').click();
+  await (await chooser).setFiles(label);
+  await expect(page.locator('.verdict__title')).toHaveText('Not safe', { timeout: 20_000 });
+
+  // The same button on the "label photos are on" screen must work too (it once did nothing).
+  await page.locator('.nav__item[data-view="settings"]').click();
+  await page.locator('[data-action="nav"][data-view="key"]').click();
+  chooser = page.waitForEvent('filechooser');
+  await page.locator('.view--key [data-action="photo"]').click();
+  await (await chooser).setFiles(label);
+  await expect(page.locator('.tag--photo')).toBeVisible({ timeout: 20_000 });
+
+  // And the "choose a photo" alternative.
+  await page.locator('.nav__item[data-view="scan"]').click();
+  chooser = page.waitForEvent('filechooser');
+  await page.locator('.view--scan [data-action="photo-library"]').click();
+  await (await chooser).setFiles(label);
   await expect(page.locator('.verdict__title')).toHaveText('Not safe', { timeout: 20_000 });
   await expect(page.locator('.verdict__reasons')).toContainText('pork');
   await expect(page.locator('.tag--photo')).toHaveText('From your label photo');

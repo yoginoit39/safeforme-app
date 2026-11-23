@@ -229,13 +229,35 @@ async function beginScan() {
   }
 }
 
-function requestPhoto() {
+/**
+ * The photo pickers live outside the app root, so they exist on every screen
+ * and survive re-renders. One opens the camera, the other the photo library.
+ */
+function makePhotoInput(id: string, camera: boolean): HTMLInputElement {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.id = id;
+  input.accept = 'image/*';
+  if (camera) input.setAttribute('capture', 'environment');
+  input.hidden = true;
+  input.addEventListener('change', () => {
+    const file = input.files?.[0];
+    input.value = '';
+    if (file) void handlePhoto(file);
+  });
+  document.body.appendChild(input);
+  return input;
+}
+const cameraInput = makePhotoInput('photo-input', true);
+const libraryInput = makePhotoInput('photo-library-input', false);
+
+function requestPhoto(from: 'camera' | 'library' = 'camera') {
   if (!loadGeminiKey()) {
     // No key: walk the user through getting one. No network call is made.
     go('key');
     return;
   }
-  (document.getElementById('photo-input') as HTMLInputElement | null)?.click();
+  (from === 'camera' ? cameraInput : libraryInput).click();
 }
 
 async function handlePhoto(file: File) {
@@ -424,7 +446,7 @@ function scanView(): string {
       </div>
     </form>
     <button class="btn btn--secondary" data-action="photo" ${busy ? 'disabled' : ''}>${icon('camera')}No barcode? Photograph the label</button>
-    <input id="photo-input" type="file" accept="image/*" capture="environment" hidden />
+    <button class="link photo-alt" data-action="photo-library" ${busy ? 'disabled' : ''}>or choose a photo you already took</button>
     ${statsCard}
     ${recent}
     ${installCard()}
@@ -642,7 +664,7 @@ function keyView(): string {
   return `
     <h1 class="title">Turn on <em>label photos</em></h1>
     <p class="sub">No barcode? Photograph the ingredients and get the same answer. It runs on Google’s AI with your own free key. About a minute, no card.</p>
-    ${hasKey ? `<div class="notice notice--ok"><strong>Label photos are on.</strong><div class="row"><button class="btn btn--small btn--primary" data-action="photo">Photograph a label</button><button class="btn btn--small btn--ghost" data-action="key-remove">Remove key</button></div></div>` : ''}
+    ${hasKey ? `<div class="notice notice--ok"><strong>Label photos are on.</strong><div class="row"><button class="btn btn--small btn--primary" data-action="photo">Photograph a label</button><button class="btn btn--small" data-action="photo-library">Choose a photo</button><button class="btn btn--small btn--ghost" data-action="key-remove">Remove key</button></div></div>` : ''}
     <ol class="steps">
       <li>
         <span class="steps__n">1</span>
@@ -778,7 +800,10 @@ app.addEventListener('click', (ev) => {
       openResult(DEMO_PRODUCTS[Number(el.dataset.index)], true);
       break;
     case 'photo':
-      requestPhoto();
+      requestPhoto('camera');
+      break;
+    case 'photo-library':
+      requestPhoto('library');
       break;
     case 'history-open': {
       const entry = loadHistory()[Number(el.dataset.index)];
@@ -847,14 +872,6 @@ app.addEventListener('submit', (ev) => {
       void saveAndTestKey(String(new FormData(form).get('key') ?? ''));
       break;
   }
-});
-
-app.addEventListener('change', (ev) => {
-  const input = ev.target as HTMLInputElement;
-  if (input.id !== 'photo-input') return;
-  const file = input.files?.[0];
-  input.value = '';
-  if (file) void handlePhoto(file);
 });
 
 // Offer "add to home screen" where the browser supports it (Android / desktop Chrome).

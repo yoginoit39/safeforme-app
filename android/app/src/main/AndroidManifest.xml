@@ -30,6 +30,13 @@
         </provider>
     </application>
 
+    <!-- Lets the "Photograph the label" button hand over to the phone's camera app (Android 11+ hides other apps unless declared). -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
+
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
