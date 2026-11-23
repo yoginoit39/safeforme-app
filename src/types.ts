@@ -1,7 +1,7 @@
 export type Profile = {
   allergies: string[]; // 'peanuts' | 'tree-nuts' | 'milk' | 'egg' | 'soy' | 'gluten' | 'fish' | 'shellfish' | 'sesame'
-  rules: string[]; // 'halal' | 'kosher' | 'vegan' | 'vegetarian' | 'pregnancy'
-  watch: string[]; // 'diabetes' | 'low-salt' | 'low-sugar'
+  rules: string[]; // 'halal' | 'kosher' | 'vegan' | 'vegetarian' | 'pregnancy' | 'celiac' | 'lactose'
+  watch: string[]; // 'diabetes' | 'low-salt' | 'low-sugar' | 'cholesterol' | 'low-carb' | avoid list: 'no-palm-oil' | 'no-sweeteners' | 'no-added-sugar' | 'no-additives' | 'no-caffeine'
   goal: 'none' | 'lose-weight' | 'build-muscle' | 'eat-cleaner';
 };
 
@@ -13,6 +13,7 @@ export type Nutriments = {
   protein?: number;
   fiber?: number;
   kcal?: number;
+  carbs?: number;
   caffeine?: number;
 };
 

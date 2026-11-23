@@ -97,7 +97,7 @@ export function recordScan(wasCaught: boolean): void {
 }
 
 /** Small UI flags: has the welcome screen been seen, was the install tip dismissed. */
-export type Flags = { onboarded?: boolean; installDismissed?: boolean };
+export type Flags = { onboarded?: boolean; installDismissed?: boolean; aiTipDismissed?: boolean };
 
 export const loadFlags = (): Flags => read<Flags>(KEYS.flags) ?? {};
 export const setFlag = (flag: keyof Flags) => write(KEYS.flags, { ...loadFlags(), [flag]: true });

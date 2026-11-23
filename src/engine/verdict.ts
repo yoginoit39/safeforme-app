@@ -8,7 +8,7 @@ import type { Profile, ProductData, Verdict } from '../types';
  */
 
 /** A set of search terms plus phrases that look like a hit but are not. */
-type TermGroup = { terms: string[]; except?: string[] };
+export type TermGroup = { terms: string[]; except?: string[] };
 
 type AllergenDef = TermGroup & {
   id: string;
@@ -100,11 +100,35 @@ export const ALLERGENS: AllergenDef[] = [
     terms: ['sesame', 'tahini', 'sésame', 'sesam', 'sésamo', 'sesamo'],
     except: ['sesame-free', 'sesame free'],
   },
+  {
+    id: 'celery',
+    label: 'celery',
+    tags: ['celery'],
+    terms: ['celery', 'celeriac', 'céleri', 'sellerie', 'apio', 'sedano'],
+  },
+  {
+    id: 'mustard',
+    label: 'mustard',
+    tags: ['mustard'],
+    terms: ['mustard', 'moutarde', 'senf', 'mostaza', 'senape'],
+  },
+  {
+    id: 'lupin',
+    label: 'lupin',
+    tags: ['lupin'],
+    terms: ['lupin', 'lupine', 'lupini', 'altramuz'],
+  },
+  {
+    id: 'sulphites',
+    label: 'sulphites',
+    tags: ['sulphur-dioxide-and-sulphites', 'sulphites', 'sulfites'],
+    terms: ['sulphite', 'sulfite', 'sulphur dioxide', 'sulfur dioxide', 'metabisulphite', 'metabisulfite', 'bisulphite', 'bisulfite', 'e220', 'e221', 'e222', 'e223', 'e224', 'e226', 'e227', 'e228', 'anhydride sulfureux', 'schwefeldioxid'],
+  },
 ];
 
 const allergenById = (id: string) => ALLERGENS.find((a) => a.id === id);
 
-const PORK: TermGroup = {
+export const PORK: TermGroup = {
   terms: ['pork', 'bacon', 'ham', 'lard', 'pig', 'swine', 'porcine', 'prosciutto', 'pancetta', 'porc', 'jambon', 'saindoux', 'schwein', 'schweinefleisch', 'speck', 'cerdo', 'jamón', 'maiale'],
 };
 
@@ -126,7 +150,7 @@ const GELATIN_UNKNOWN_SOURCE: TermGroup = {
   except: ['fish gelatine', 'fish gelatin', 'gélatine de poisson'],
 };
 
-const MEAT: TermGroup = {
+export const MEAT: TermGroup = {
   terms: [
     'meat', 'beef', 'chicken', 'turkey', 'lamb', 'mutton', 'veal', 'duck', 'goose', 'poultry', 'venison', 'sausage', 'salami', 'tallow', 'suet', 'liver',
     'viande', 'boeuf', 'bœuf', 'poulet', 'dinde', 'agneau', 'fleisch', 'rindfleisch', 'hähnchen', 'huhn', 'carne', 'pollo', 'manzo',
@@ -140,12 +164,74 @@ const OTHER_ANIMAL: TermGroup = {
 
 const INSECT_OR_FINING: TermGroup = { terms: ['carmine', 'cochineal', 'e120', 'isinglass', 'collagen'] };
 
-const CAFFEINE: TermGroup = {
+export const CAFFEINE: TermGroup = {
   terms: ['caffeine', 'coffee', 'espresso', 'guarana', 'matcha', 'black tea', 'green tea', 'yerba mate', 'kola nut', 'cola nut', 'caféine', 'café', 'koffein', 'kaffee', 'cafeína', 'caffeina', 'caffè'],
   except: ['caffeine-free', 'caffeine free', 'decaffeinated', 'sans caféine', 'koffeinfrei'],
 };
 
+/** Ingredient families people commonly choose to avoid. Shared with the score and the "why" summary. */
+export const ADDED_SUGAR: TermGroup = {
+  terms: [
+    'sugar', 'glucose syrup', 'glucose-fructose syrup', 'fructose syrup', 'corn syrup', 'high fructose corn syrup', 'invert sugar', 'dextrose', 'fructose', 'sucrose', 'cane sugar', 'brown sugar', 'caramelised sugar', 'golden syrup', 'molasses', 'agave syrup', 'maple syrup', 'honey', 'glucose',
+    'sucre', 'sirop de glucose', 'sirop de glucose-fructose', 'zucker', 'glukosesirup', 'azúcar', 'jarabe de glucosa', 'zucchero', 'sciroppo di glucosio',
+  ],
+  except: ['no added sugar', 'sugar-free', 'sugar free', 'sans sucre', 'sans sucres ajoutés', 'zuckerfrei', 'sin azúcar', 'senza zucchero', 'sugar alcohol'],
+};
+export const SWEETENERS: TermGroup = {
+  terms: [
+    'aspartame', 'sucralose', 'acesulfame', 'acesulfame k', 'acesulfame potassium', 'saccharin', 'cyclamate', 'steviol glycosides', 'stevia', 'sorbitol', 'maltitol', 'xylitol', 'erythritol', 'isomalt', 'neotame', 'advantame', 'sweetener', 'édulcorant', 'süßungsmittel', 'edulcorante', 'dolcificante',
+    'e950', 'e951', 'e952', 'e954', 'e955', 'e960', 'e961', 'e962', 'e965', 'e967', 'e968', 'e420',
+  ],
+};
+export const PALM_OIL: TermGroup = {
+  terms: ['palm oil', 'palm fat', 'palm kernel oil', 'palm kernel fat', 'palm olein', 'palm stearin', 'palm', 'huile de palme', 'graisse de palme', 'palmöl', 'palmfett', 'aceite de palma', 'olio di palma'],
+  except: ['palm oil free', 'palm-oil-free', 'sans huile de palme', 'no palm oil', 'heart of palm', 'hearts of palm', 'palm sugar'],
+};
+export const HYDROGENATED: TermGroup = {
+  terms: ['partially hydrogenated', 'hydrogenated', 'partiellement hydrogénée', 'hydrogénée', 'gehärtet', 'hidrogenado', 'hidrogenada', 'idrogenato'],
+  except: ['non-hydrogenated', 'non hydrogenated', 'non hydrogénée'],
+};
+/** Words that mark industrial formulation: the basis for calling something an additive or ultra-processed. */
+export const ADDITIVE_WORDS: TermGroup = {
+  terms: [
+    'flavouring', 'flavoring', 'flavour', 'flavor', 'aroma', 'arôme', 'emulsifier', 'émulsifiant', 'emulgator', 'colour', 'color', 'colorant', 'farbstoff', 'preservative', 'conservateur', 'konservierungsstoff', 'stabiliser', 'stabilizer', 'stabilisant', 'thickener', 'épaississant', 'modified starch', 'amidon modifié', 'maltodextrin', 'maltodextrine', 'flavour enhancer', 'flavor enhancer', 'exhausteur de goût', 'monosodium glutamate', 'protein isolate', 'acidity regulator', 'antioxidant', 'glazing agent', 'anti-caking agent', 'humectant', 'gelling agent',
+  ],
+  except: ['natural flavouring', 'natural flavoring', 'natural flavourings', 'natural flavorings', 'arôme naturel', 'no artificial colours', 'no artificial colors', 'no preservatives', 'sans conservateur', 'sans colorant'],
+};
+export const OATS: TermGroup = { terms: ['oat', 'oatmeal', 'avoine', 'hafer', 'avena'] };
+
+/** Distinct E-numbers named in an ingredient list, e.g. ["e150d", "e330"]. */
+export function eNumbers(text: string): string[] {
+  return [...new Set([...text.matchAll(/(?:^|[^a-z0-9])e[\s-]?(\d{3}[a-z]?)(?![a-z0-9])/gi)].map((m) => `e${m[1].toLowerCase()}`))];
+}
+
+const AVOID: { id: string; label: string; group: TermGroup }[] = [
+  { id: 'no-palm-oil', label: 'palm oil', group: PALM_OIL },
+  { id: 'no-sweeteners', label: 'sweeteners', group: SWEETENERS },
+  { id: 'no-added-sugar', label: 'added sugar', group: ADDED_SUGAR },
+  { id: 'no-caffeine', label: 'caffeine', group: CAFFEINE },
+];
+
+/** Which of the user's "prefer to avoid" items this product contains. */
+export function avoidHits(product: ProductData, profile: Profile): { id: string; label: string; found: string }[] {
+  const { main } = splitTraces((product.ingredientsText ?? '').toLowerCase());
+  const hits: { id: string; label: string; found: string }[] = [];
+  for (const a of AVOID) {
+    if (!profile.watch.includes(a.id)) continue;
+    const found = findTerm(main, a.group) ?? (a.id === 'no-caffeine' && (product.nutriments?.caffeine ?? 0) > 0 ? 'caffeine' : null);
+    if (found) hits.push({ id: a.id, label: a.label, found });
+  }
+  if (profile.watch.includes('no-additives')) {
+    const es = eNumbers(main);
+    const word = findTerm(main, ADDITIVE_WORDS);
+    if (es.length || word) hits.push({ id: 'no-additives', label: 'additives', found: es.length ? es.slice(0, 3).join(', ').toUpperCase() : word! });
+  }
+  return hits;
+}
+
 const RULE_LABEL: Record<string, string> = {
+  celiac: 'coeliac',
+  lactose: 'lactose',
   halal: 'halal',
   kosher: 'kosher',
   vegan: 'vegan',
@@ -316,6 +402,34 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
     else if (!hasText) unverifiable.push('pregnancy');
     const caffeine = (product.nutriments?.caffeine ?? 0) > 0 || findTerm(main, CAFFEINE);
     if (caffeine) warnings.push('Contains caffeine — limit while pregnant.');
+  }
+
+  if (rules.has('lactose')) {
+    const milk = allergenById('milk')!;
+    const labelled = product.labels.some((l) => /lactose-free|no-lactose|sans-lactose|laktosefrei/.test(l));
+    const hit = hasTag(product.allergens, milk) ? 'milk' : findTerm(main, milk);
+    if (hit && !labelled) notSafe.push(`Contains ${hit} — a source of lactose.`);
+    else if (!hit && !hasText) unverifiable.push('lactose');
+  }
+
+  if (rules.has('celiac')) {
+    const gluten = allergenById('gluten')!;
+    const labelled = product.labels.some((l) => /no-gluten|gluten-free|sans-gluten|glutenfrei/.test(l));
+    const inMain = hasTag(product.allergens, gluten) ? 'gluten' : findTerm(main, gluten);
+    if (inMain) {
+      notSafe.push(`Contains ${inMain === 'gluten' ? 'gluten' : `gluten ("${inMain}")`} — not suitable for coeliac disease.`);
+    } else if (hasTag(product.traces, gluten) || findTerm(traceText, gluten)) {
+      notSafe.push('May contain traces of gluten — not suitable for coeliac disease.');
+    } else if (!labelled) {
+      const oats = findTerm(main, OATS);
+      if (oats) unknown.push('Contains oats, which are often contaminated with gluten, and no gluten-free label was found in the data.');
+      else if (!hasText) unverifiable.push('celiac');
+    }
+  }
+
+  // "Prefer to avoid" items never make a product unsafe; they are flagged as warnings.
+  for (const hit of avoidHits(product, profile)) {
+    warnings.push(`Contains ${hit.label}${hit.found !== hit.label ? ` (${hit.found})` : ''} — on your avoid list.`);
   }
 
   // 4. Missing data — never SAFE.

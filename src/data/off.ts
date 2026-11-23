@@ -33,6 +33,7 @@ export function mapOffProduct(barcode: string, p: Record<string, any>): ProductD
     protein: num(raw.proteins_100g),
     fiber: num(raw.fiber_100g),
     kcal: num(raw['energy-kcal_100g']),
+    carbs: num(raw.carbohydrates_100g),
     caffeine: num(raw.caffeine_100g),
   };
   const hasNutriments = Object.values(nutriments).some((v) => v !== undefined);

@@ -52,9 +52,9 @@ export async function mockNetwork(page: Page) {
 }
 
 export const FULL_PROFILE = {
-  allergies: ['peanuts', 'tree-nuts', 'milk', 'egg', 'soy', 'gluten', 'fish', 'shellfish', 'sesame'],
-  rules: ['halal', 'kosher', 'vegan', 'vegetarian', 'pregnancy'],
-  watch: ['diabetes', 'low-sugar', 'low-salt'],
+  allergies: ['peanuts', 'tree-nuts', 'milk', 'egg', 'soy', 'gluten', 'fish', 'shellfish', 'sesame', 'celery', 'mustard', 'lupin', 'sulphites'],
+  rules: ['halal', 'kosher', 'vegan', 'vegetarian', 'pregnancy', 'celiac', 'lactose'],
+  watch: ['diabetes', 'low-sugar', 'low-salt', 'cholesterol', 'low-carb', 'no-palm-oil', 'no-added-sugar', 'no-sweeteners', 'no-additives', 'no-caffeine'],
   goal: 'lose-weight',
 };
 

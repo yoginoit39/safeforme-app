@@ -4,9 +4,10 @@ import { App as NativeApp } from '@capacitor/app';
 import type { HistoryEntry, ProductData, Profile, Verdict } from './types';
 import { computeVerdict } from './engine/verdict';
 import { bandFor, computeScore, fmt } from './engine/score';
+import { explain, type Explanation } from './engine/explain';
 import { DEMO_EMOJI, DEMO_PRODUCTS, SAMPLE_BARCODES } from './data/demo';
 import { LookupError, lookupBarcode } from './data/off';
-import { PhotoError, readLabelPhoto, testKey } from './data/gemini';
+import { PhotoError, explainIngredients, readLabelPhoto, testKey, type AiExplanation } from './data/gemini';
 import { prewarmScanner, scannerSupported, startScan, type ScanSession } from './scanner';
 import {
   addHistory, deleteAllData, loadFlags, loadGeminiKey, loadHistory, loadProfile, loadStats, recordScan,
@@ -24,6 +25,7 @@ const ATTRIBUTION =
 const ALLERGY_OPTS: [string, string][] = [
   ['peanuts', 'Peanuts'], ['tree-nuts', 'Tree nuts'], ['milk', 'Milk'], ['egg', 'Egg'], ['soy', 'Soy'],
   ['gluten', 'Wheat / gluten'], ['fish', 'Fish'], ['shellfish', 'Shellfish'], ['sesame', 'Sesame'],
+  ['celery', 'Celery'], ['mustard', 'Mustard'], ['lupin', 'Lupin'], ['sulphites', 'Sulphites'],
 ];
 const RULE_OPTS: [string, string, string][] = [
   ['halal', 'Halal', 'Flags pork and alcohol. Only certified products can show SAFE.'],
@@ -31,11 +33,20 @@ const RULE_OPTS: [string, string, string][] = [
   ['vegan', 'Vegan', 'Flags any animal ingredient.'],
   ['vegetarian', 'Vegetarian', 'Flags meat, fish and gelatin.'],
   ['pregnancy', 'Pregnancy', 'Flags alcohol, warns on caffeine.'],
+  ['celiac', 'Coeliac / gluten-free', 'Flags gluten, traces of gluten, and oats without a gluten-free label.'],
+  ['lactose', 'Lactose intolerant', 'Flags milk ingredients unless the product is labelled lactose-free.'],
 ];
 const WATCH_OPTS: [string, string, string][] = [
   ['diabetes', 'Diabetes', 'Watch sugar.'],
   ['low-sugar', 'Low sugar', 'Watch sugar in general.'],
   ['low-salt', 'Low salt', 'Watch salt, e.g. for blood pressure.'],
+  ['cholesterol', 'Cholesterol', 'Watch saturated fat.'],
+  ['low-carb', 'Low carb / keto', 'Watch carbohydrates.'],
+];
+/** Things people choose to avoid. Stored with the health-watch items; they lower the score and add a warning. */
+const AVOID_OPTS: [string, string][] = [
+  ['no-palm-oil', 'Palm oil'], ['no-added-sugar', 'Added sugar'], ['no-sweeteners', 'Sweeteners'],
+  ['no-additives', 'Additives'], ['no-caffeine', 'Caffeine'],
 ];
 const GOAL_OPTS: [Profile['goal'], string][] = [
   ['none', 'No goal'], ['lose-weight', 'Lose weight'], ['build-muscle', 'Build muscle'], ['eat-cleaner', 'Eat cleaner'],
@@ -82,6 +93,8 @@ let historyFilter: HistoryFilter = 'all';
 let installEvent: InstallEvent | null = null;
 let animateScore = false;
 let keyDraft = '';
+/** AI explanation for the product currently open. Kept in memory only. */
+let ai: { product: ProductData; status: 'busy' | 'done' | 'error'; data?: AiExplanation; error?: string } | null = null;
 
 const app = document.getElementById('app')!;
 
@@ -108,7 +121,7 @@ function profileParts(p: Profile): string[] {
   return [
     ...p.allergies.map((a) => `${ALLERGY_SINGULAR[a] ?? labelOf(ALLERGY_OPTS, a).toLowerCase()} allergy`),
     ...p.rules.map((r) => labelOf(RULE_OPTS, r).toLowerCase()),
-    ...p.watch.map((w) => labelOf(WATCH_OPTS, w).toLowerCase()),
+    ...p.watch.map((w) => (w.startsWith('no-') ? `no ${labelOf(AVOID_OPTS, w).toLowerCase()}` : labelOf(WATCH_OPTS, w).toLowerCase())),
     ...(p.goal !== 'none' ? [labelOf(GOAL_OPTS, p.goal).toLowerCase()] : []),
   ];
 }
@@ -142,6 +155,7 @@ function finishOnboarding() {
 // ---------- actions ----------
 
 function openResult(product: ProductData, fresh: boolean) {
+  if (ai?.product !== product) ai = null;
   current = product;
   if (fresh) {
     const level = computeVerdict(product, profile).level;
@@ -280,6 +294,27 @@ async function handlePhoto(file: File) {
   }
 }
 
+async function askAi() {
+  const product = current;
+  if (!product?.ingredientsText) return;
+  const key = loadGeminiKey();
+  if (!key) {
+    go('key');
+    return;
+  }
+  ai = { product, status: 'busy' };
+  render();
+  try {
+    const data = await explainIngredients(product, key);
+    if (ai?.product === product) ai = { product, status: 'done', data };
+  } catch (e) {
+    if (ai?.product === product) {
+      ai = { product, status: 'error', error: e instanceof PhotoError ? e.message : 'Something went wrong asking the AI. Please try again.' };
+    }
+  }
+  if (view === 'result' && current === product) render();
+}
+
 function saveProfileFromForm(form: HTMLFormElement) {
   const data = new FormData(form);
   profile = {
@@ -381,6 +416,21 @@ function installCard(): string {
   </section>`;
 }
 
+/** A nudge, after the first scan, towards the free extras a Google key unlocks. */
+function aiTipCard(): string {
+  if (loadGeminiKey() || loadFlags().aiTipDismissed || loadStats().scans < 1) return '';
+  return `<section class="card ai-tip">
+    <div>
+      <strong>Get more from Greenlit — still free</strong>
+      <p class="hint">Add your own free Google key to scan labels that have no barcode and get plain-English explanations of ingredients.</p>
+    </div>
+    <div class="row">
+      <button class="btn btn--small btn--primary" data-action="nav" data-view="key">Set it up · 1 minute</button>
+      <button class="btn btn--small btn--ghost" data-action="ai-tip-dismiss">Not now</button>
+    </div>
+  </section>`;
+}
+
 function samplesHtml(): string {
   return `
     <p class="samples__label">Real products</p>
@@ -449,6 +499,7 @@ function scanView(): string {
     <button class="link photo-alt" data-action="photo-library" ${busy ? 'disabled' : ''}>or choose a photo you already took</button>
     ${statsCard}
     ${recent}
+    ${aiTipCard()}
     ${installCard()}
     ${samples}`;
 }
@@ -493,6 +544,64 @@ function fillMeter(animate: boolean) {
     meter.style.width = width; // CSS transition animates the fill
     frame(now);
   });
+}
+
+/** The "why" behind the result: summary, what stands out, how processed it is, ingredients to know about. */
+function whyHtml(why: Explanation, p: ProductData): string {
+  const insights = why.insights.length
+    ? `<ul class="insights">${why.insights.map((i) => `<li class="insight insight--${i.tone}"><span class="insight__dot" aria-hidden="true"></span><div><strong>${esc(i.title)}</strong>${i.detail ? `<small>${esc(i.detail)}</small>` : ''}</div></li>`).join('')}</ul>`
+    : '';
+  const proc = why.processing;
+  const processing = proc
+    ? `<section class="card">
+        <h2>How processed is it?</h2>
+        <div class="nova" role="img" aria-label="Processing level ${proc.group} of 4">${[1, 2, 3, 4].map((g) => `<span class="nova__step nova__step--${g} ${g === proc.group ? 'is-on' : ''}">${g}</span>`).join('')}</div>
+        <div class="nova__title">${esc(proc.title)}${proc.estimated ? ' <span class="tag">estimate</span>' : ''}</div>
+        <p>${esc(proc.text)}</p>
+        ${proc.source ? `<p class="source">Source: ${esc(proc.source)}</p>` : ''}
+      </section>`
+    : '';
+  const notable = why.ingredients.length
+    ? `<section class="card">
+        <h2>Ingredients to know about</h2>
+        <ul class="notable">${why.ingredients.map((f) => `<li><strong>${esc(f.name)}</strong><p>${esc(f.note)}</p>${f.source ? `<p class="source">Source: ${esc(f.source)}</p>` : ''}</li>`).join('')}</ul>
+        <p class="hint">These notes report what official bodies have decided. They are information, not a diagnosis or medical advice.</p>
+      </section>`
+    : '';
+  const full = p.ingredientsText
+    ? `<details class="fulling"><summary>Full ingredient list</summary><p>${esc(p.ingredientsText)}</p></details>`
+    : '';
+  const mine = ai?.product === p ? ai : null;
+  const hasKey = !!loadGeminiKey();
+  const aiBlock = !p.ingredientsText
+    ? ''
+    : mine?.status === 'busy'
+      ? `<div class="notice notice--busy" role="status"><span class="spinner"></span>Asking Google’s AI about these ingredients…</div>`
+      : mine?.status === 'done' && mine.data
+        ? `<div class="ai">
+            <span class="tag tag--photo">AI explanation</span>
+            <p>${esc(mine.data.overview)}</p>
+            ${mine.data.ingredients.length ? `<ul class="notable">${mine.data.ingredients.map((i) => `<li><strong>${esc(i.name)}</strong><p>${esc(i.what)}</p>${i.note ? `<p class="ai__note">${esc(i.note)}</p>` : ''}</li>`).join('')}</ul>` : ''}
+            <p class="hint">Written by AI from the ingredient list, so it can be wrong. It is not medical advice, and your safety verdict above never uses AI.</p>
+          </div>`
+        : `<div class="ai-ask">
+            ${mine?.status === 'error' ? `<div class="notice notice--error" role="alert">${esc(mine.error)}</div>` : ''}
+            <button class="btn" data-action="ai-explain">${icon('question')}${mine?.status === 'error' ? 'Try again' : 'Explain these ingredients with AI'}</button>
+            <p class="hint">${hasKey
+              ? 'Uses your own Google key. Only this product’s ingredients are sent — never your profile.'
+              : 'A free extra. Add your own free Google key (1 minute) to turn it on.'}</p>
+          </div>`;
+  return `
+    <section class="card why">
+      <h2>Why</h2>
+      <p class="why__headline">${esc(why.headline)}</p>
+      <p class="why__summary">${esc(why.summary)}</p>
+      ${insights}
+      ${aiBlock}
+      ${full}
+    </section>
+    ${processing}
+    ${notable}`;
 }
 
 function numberCell(label: string, value: number | undefined, unit = 'g'): string {
@@ -543,6 +652,8 @@ function resultView(): string {
       ${scoreHtml}
     </section>
 
+    ${whyHtml(explain(p, profile, verdict, score), p)}
+
     <section class="card product">
       <div>
         <div class="product__name">${esc(p.name)}</div>
@@ -556,6 +667,7 @@ function resultView(): string {
       <h2>Per 100g</h2>
       <div class="nums">
         ${numberCell('Sugar', n.sugars)}${numberCell('Salt', n.salt)}${numberCell('Fat', n.fat)}${numberCell('Protein', n.protein)}
+        ${numberCell('Sat. fat', n.saturatedFat)}${numberCell('Carbs', n.carbs)}${numberCell('Fibre', n.fiber)}${numberCell('Energy', n.kcal, ' kcal')}
       </div>
     </section>
 
@@ -584,11 +696,14 @@ function profileView(): string {
       <fieldset><legend>Allergies</legend>
         <div class="opts opts--grid">${ALLERGY_OPTS.map(([v, l]) => check('allergies', v, l, undefined, profile.allergies.includes(v))).join('')}</div>
       </fieldset>
-      <fieldset><legend>Rules</legend>
+      <fieldset><legend>Diet &amp; intolerances</legend>
         <div class="opts">${RULE_OPTS.map(([v, l, h]) => check('rules', v, l, h, profile.rules.includes(v))).join('')}</div>
       </fieldset>
       <fieldset><legend>Health watch</legend>
         <div class="opts">${WATCH_OPTS.map(([v, l, h]) => check('watch', v, l, h, profile.watch.includes(v))).join('')}</div>
+      </fieldset>
+      <fieldset><legend>Prefer to avoid</legend>
+        <div class="opts opts--grid">${AVOID_OPTS.map(([v, l]) => check('watch', v, l, undefined, profile.watch.includes(v))).join('')}</div>
       </fieldset>
       <fieldset><legend>Goal</legend>
         <div class="opts opts--grid">${GOAL_OPTS.map(([v, l]) => check('goal', v, l, undefined, profile.goal === v, 'radio')).join('')}</div>
@@ -633,15 +748,15 @@ function settingsView(): string {
   return `
     <h1 class="title">Settings</h1>
     <section class="card">
-      <h2>Label photos</h2>
+      <h2>AI extras</h2>
       <p>${hasKey
         ? 'On. Your Gemini key is saved on this device.'
-        : 'Off. Needs your own free Google key — about a minute to set up, no card.'}</p>
+        : 'Off. Label photos and AI ingredient explanations need your own free Google key — about a minute to set up, no card.'}</p>
       <div class="row">
-        <button class="btn btn--primary" data-action="nav" data-view="key">${hasKey ? 'Change key' : 'Set up label photos'}</button>
+        <button class="btn btn--primary" data-action="nav" data-view="key">${hasKey ? 'Change key' : 'Set up AI extras'}</button>
         ${hasKey ? '<button class="btn btn--ghost" type="button" data-action="key-remove">Remove key</button>' : ''}
       </div>
-      <p class="hint">The key is stored only in this browser and is sent only to Google’s API when you photograph a label. Barcode scanning never needs it.</p>
+      <p class="hint">The key is stored only in this browser and is sent only to Google’s API when you photograph a label or ask for an AI explanation. Barcode scanning never needs it.</p>
     </section>
     ${noticeHtml()}
     ${install}
@@ -662,9 +777,9 @@ function settingsView(): string {
 function keyView(): string {
   const hasKey = !!loadGeminiKey();
   return `
-    <h1 class="title">Turn on <em>label photos</em></h1>
-    <p class="sub">No barcode? Photograph the ingredients and get the same answer. It runs on Google’s AI with your own free key. About a minute, no card.</p>
-    ${hasKey ? `<div class="notice notice--ok"><strong>Label photos are on.</strong><div class="row"><button class="btn btn--small btn--primary" data-action="photo">Photograph a label</button><button class="btn btn--small" data-action="photo-library">Choose a photo</button><button class="btn btn--small btn--ghost" data-action="key-remove">Remove key</button></div></div>` : ''}
+    <h1 class="title">Turn on <em>AI extras</em></h1>
+    <p class="sub">Two free extras run on Google’s AI with your own key: photographing a label when there is no barcode, and plain-English explanations of ingredients. About a minute, no card. Everything else in Greenlit works without it.</p>
+    ${hasKey ? `<div class="notice notice--ok"><strong>AI extras are on.</strong><div class="row"><button class="btn btn--small btn--primary" data-action="photo">Photograph a label</button><button class="btn btn--small" data-action="photo-library">Choose a photo</button><button class="btn btn--small btn--ghost" data-action="key-remove">Remove key</button></div></div>` : ''}
     <ol class="steps">
       <li>
         <span class="steps__n">1</span>
@@ -703,7 +818,7 @@ function keyView(): string {
       </li>
     </ol>
     ${noticeHtml()}
-    <p class="hint">Private: the key stays on this phone and is sent only to Google, only when you photograph a label. Treat it like a password. Google’s free allowance has daily limits — plenty for personal use.</p>`;
+    <p class="hint">Private: the key stays on this phone and is sent only to Google, only when you photograph a label or ask for an AI explanation. Your profile is never sent. Treat the key like a password. Google’s free allowance has daily limits — plenty for personal use.</p>`;
 }
 
 async function saveAndTestKey(raw: string) {
@@ -721,7 +836,7 @@ async function saveAndTestKey(raw: string) {
     await testKey(key);
     saveGeminiKey(key);
     keyDraft = '';
-    notice = { kind: 'saved', text: 'Your key works. Label photos are on.' };
+    notice = { kind: 'saved', text: 'Your key works. AI extras are on.' };
   } catch (e) {
     const err = e instanceof PhotoError ? e : new PhotoError('Something went wrong checking the key. Please try again.');
     if (err.kind === 'key' || err.kind === 'model') {
@@ -801,6 +916,13 @@ app.addEventListener('click', (ev) => {
       break;
     case 'photo':
       requestPhoto('camera');
+      break;
+    case 'ai-explain':
+      void askAi();
+      break;
+    case 'ai-tip-dismiss':
+      setFlag('aiTipDismissed');
+      render();
       break;
     case 'photo-library':
       requestPhoto('library');

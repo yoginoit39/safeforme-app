@@ -18,22 +18,32 @@ Tell it once what to watch for — allergies, halal, kosher, vegan, vegetarian, 
 • A clear verdict: Safe for you, Not safe, or Can't confirm — with the exact reason, in plain words.
 • A personal health score from 0 to 100, with every point explained.
 
+UNDERSTAND WHAT YOU'RE EATING
+• A plain-language "Why" for every product: added sugars, palm oil, sweeteners, additives, and what the product is mostly made of.
+• How processed is it? From minimally processed to ultra-processed, with what health authorities say.
+• Ingredients to know about: additives that regulators such as the FDA and WHO have acted on, with the source named.
+
+MADE FOR MORE NEEDS
+Allergies (peanuts, tree nuts, milk, egg, soy, wheat/gluten, fish, shellfish, sesame, celery, mustard, lupin, sulphites), coeliac, lactose intolerance, halal, kosher, vegan, vegetarian, pregnancy, diabetes, low salt, cholesterol, low carb — plus an avoid list for palm oil, added sugar, sweeteners, additives and caffeine.
+
 WHY IT'S DIFFERENT
 • Personal, not generic. The same product can be fine for one person and unsafe for another.
 • Honest. If a product's ingredients are missing, the app says "Can't confirm" — never a false "Safe".
 • Halal and kosher handled carefully: only certified products show Safe.
 • Catches "may contain traces" warnings for allergies.
 
-NO BARCODE? PHOTOGRAPH THE LABEL
-Snap the ingredients list in any language and get the same verdict and score. This optional feature uses Google's AI with your own free key; the app walks you through setting it up in about a minute.
+FREE AI EXTRAS (OPTIONAL)
+• No barcode? Photograph the ingredients list in any language and get the same verdict and score.
+• Tap for a plain-English AI explanation of the ingredients.
+These use Google's AI with your own free key; the app walks you through setting it up in about a minute. Your profile is never sent.
 
 PRIVATE BY DESIGN
 • No account. No sign-up. No ads. No tracking.
 • Your profile and history stay on your phone.
 • Works offline for products you've scanned recently.
 
-FREE
-Barcode scanning is free and unlimited.
+FREE, AND STAYING FREE
+No subscriptions and no paid features. Barcode scanning is unlimited.
 
 IMPORTANT
 Greenlit is an information tool, not a medical device, and does not give medical advice. Product data comes from Open Food Facts, a volunteer-run database, and can be incomplete or wrong. Always read the physical label before eating, especially if you have an allergy or a medical condition.

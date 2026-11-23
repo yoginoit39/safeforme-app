@@ -263,6 +263,10 @@ details.samples[open] summary::after { content: '–'; }
 .product .tag { background: #fff; color: var(--ink); }
 
 .nums { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.num:nth-child(5) { background: var(--peach); }
+.num:nth-child(6) { background: var(--sun); }
+.num:nth-child(7) { background: var(--lime); }
+.num:nth-child(8) { background: var(--sky); }
 .num { border-radius: 20px; padding: 14px 4px 12px; text-align: center; display: flex; flex-direction: column; gap: 4px; background: var(--lime); }
 .num:nth-child(2) { background: var(--sky); }
 .num:nth-child(3) { background: var(--sun); }
@@ -383,3 +387,50 @@ legend { font-family: var(--display); font-weight: 700; font-size: 1.3rem; lette
 
 /* quiet alternative under the photo button */
 .photo-alt { align-self: center; margin-top: -8px; font-size: 0.88rem; font-weight: 600; color: var(--muted); }
+
+/* ---------- why / processing / notable ingredients ---------- */
+.why__headline { font-family: var(--display); font-weight: 700; font-size: 1.45rem; letter-spacing: -0.03em; line-height: 1.12; }
+.why__summary { font-size: 0.98rem; line-height: 1.5; color: var(--ink); }
+.insights { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.insight { --t: var(--faint); display: flex; gap: 12px; align-items: flex-start; background: var(--bg); border-radius: 18px; padding: 12px 14px; }
+.insight--bad { --t: var(--danger); }
+.insight--warn { --t: var(--okay); }
+.insight--good { --t: var(--safe); }
+.insight__dot { flex: none; width: 12px; height: 12px; border-radius: 50%; background: var(--t); margin-top: 5px; }
+.insight > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.insight strong { font-size: 0.95rem; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.insight small { font-size: 0.86rem; color: var(--muted); line-height: 1.4; overflow-wrap: anywhere; }
+
+.nova { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.nova__step { height: 40px; border-radius: 14px; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 1.05rem; background: var(--line); color: var(--faint); }
+.nova__step.is-on { color: #fff; transform: scale(1.04); }
+.nova__step--1.is-on { background: var(--excellent); }
+.nova__step--2.is-on { background: var(--good); }
+.nova__step--3.is-on { background: var(--okay); }
+.nova__step--4.is-on { background: var(--bad); }
+.nova__title { font-family: var(--display); font-weight: 700; font-size: 1.25rem; letter-spacing: -0.02em; line-height: 1.15; }
+.source { font-size: 0.78rem !important; color: var(--faint); }
+
+.notable { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.notable li { background: var(--bg); border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+.notable strong { font-size: 0.98rem; }
+.notable p { font-size: 0.9rem !important; line-height: 1.45; }
+
+.fulling { border-top: 1px solid var(--line); padding-top: 12px; }
+.fulling summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; color: var(--muted); list-style: none; min-height: 28px; }
+.fulling summary::-webkit-details-marker { display: none; }
+.fulling summary::after { content: ' +'; }
+.fulling[open] summary::after { content: ' –'; }
+.fulling p { font-size: 0.86rem !important; color: var(--muted); line-height: 1.5; margin-top: 8px; overflow-wrap: anywhere; }
+
+/* ---------- AI extras ---------- */
+.ai, .ai-ask { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.ai > .tag { align-self: flex-start; }
+.ai > p { font-size: 0.96rem; line-height: 1.5; }
+.ai__note { color: var(--muted); }
+.ai-ask .btn { background: var(--ink); color: var(--bg); width: 100%; }
+.ai-ask .btn svg.icon { width: 20px; height: 20px; }
+.ai-tip { background: var(--lime); gap: 14px; }
+.ai-tip strong { font-family: var(--display); font-weight: 700; font-size: 1.3rem; letter-spacing: -0.02em; display: block; margin-bottom: 4px; line-height: 1.15; }
+.ai-tip .hint { color: var(--ink); opacity: 0.8; }
+.ai-tip .btn--ghost { color: var(--ink); }

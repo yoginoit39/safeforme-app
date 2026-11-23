@@ -130,7 +130,7 @@ test('messages: not found, offline, bad input, no key', async ({ page }, info) =
   await page.route('https://generativelanguage.googleapis.com/**', (route) => { googleCalls++; return route.abort(); });
   await page.locator('.nav__item[data-view="scan"]').click();
   await page.locator('[data-action="photo"]').click();
-  await expect(page.locator('.title')).toContainText('label photos');
+  await expect(page.locator('.title')).toContainText('AI extras');
   expect(googleCalls).toBe(0);
 });
 
@@ -176,13 +176,25 @@ test('label photo with a key → verdict; key only goes to Google', async ({ pag
   await seed(page, { allergies: [], rules: ['halal'], watch: ['diabetes'], goal: 'none' }, 'TEST-KEY-123');
   const seen: { host: string; key: string | undefined }[] = [];
   page.on('request', (r) => { const k = r.headers()['x-goog-api-key']; if (k || r.url().includes('TEST-KEY-123')) seen.push({ host: new URL(r.url()).host, key: k }); });
-  await page.route('https://generativelanguage.googleapis.com/**', (route) =>
-    route.fulfill({ json: { candidates: [{ content: { parts: [{ text: JSON.stringify({
+  const aiRequests: string[] = [];
+  await page.route('https://generativelanguage.googleapis.com/**', (route) => {
+    const sent = route.request().postData() ?? '';
+    if (!sent.includes('inline_data')) {
+      aiRequests.push(sent);
+      return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: JSON.stringify({
+        overview: 'Mostly sugar and glucose syrup set with gelatine. Very sweet, with little else nutritionally.',
+        ingredients: [
+          { name: 'Glucose syrup', what: 'A liquid sugar made from starch, used for sweetness and chewiness.', note: 'Counts as added sugar.' },
+          { name: 'Citric acid', what: 'A common acid that adds sharpness and helps preserve.', note: null },
+        ],
+      }) }] } }] } });
+    }
+    return route.fulfill({ json: { candidates: [{ content: { parts: [{ text: JSON.stringify({
       product_name: 'Gummy Sweets', ingredients_text: 'Glucose syrup, sugar, pork gelatine, citric acid',
       allergens: [], nutriments: { sugars: 52, salt: 0.05, saturated_fat: 0, fat: 0.2, protein: 6, fiber: null, kcal: 340 },
       contains_pork: true, contains_alcohol: false, contains_gelatin: true, halal_certified: null, kosher_certified: null,
-    }) }] } }] } }),
-  );
+    }) }] } }] } });
+  });
   await open(page, info);
   // a real (tiny) PNG, as if taken by the camera
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC', 'base64');
@@ -192,6 +204,15 @@ test('label photo with a key → verdict; key only goes to Google', async ({ pag
   await page.locator('.view--scan [data-action="photo"]').click();
   await (await chooser).setFiles(label);
   await expect(page.locator('.verdict__title')).toHaveText('Not safe', { timeout: 20_000 });
+
+  // AI explanation: one tap, clearly labelled, and the user's profile is NOT sent to Google.
+  await page.locator('[data-action="ai-explain"]').click();
+  await expect(page.locator('.ai')).toContainText('Glucose syrup', { timeout: 20_000 });
+  await expect(page.locator('.ai')).toContainText('it can be wrong');
+  expect(aiRequests).toHaveLength(1);
+  expect(aiRequests[0]).toContain('Glucose syrup, sugar, pork gelatine');
+  expect(aiRequests[0]).not.toMatch(/halal|diabetes|allerg/i);
+  await audit(page, info, '18-result-with-ai-explanation');
 
   // The same button on the "label photos are on" screen must work too (it once did nothing).
   await page.locator('.nav__item[data-view="settings"]').click();

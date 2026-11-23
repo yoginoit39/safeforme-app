@@ -16,7 +16,7 @@ const MODELS = ['gemini-3.5-flash-lite', 'gemini-2.5-flash-lite'];
 let workingModel: string | null = null;
 
 const INSTRUCTION =
-  'Read this food label photo (any language). Return ONLY JSON: {product_name, ingredients_text (translated to English), allergens: [..], nutriments per 100g if shown: {sugars, salt, saturated_fat, fat, protein, fiber, kcal}, contains_pork, contains_alcohol, contains_gelatin, halal_certified, kosher_certified}. Use null for anything not visible. Do not guess.';
+  'Read this food label photo (any language). Return ONLY JSON: {product_name, ingredients_text (translated to English), allergens: [..], nutriments per 100g if shown: {sugars, salt, saturated_fat, fat, protein, fiber, kcal, carbs}, contains_pork, contains_alcohol, contains_gelatin, halal_certified, kosher_certified}. Use null for anything not visible. Do not guess.';
 
 export type PhotoErrorKind = 'key' | 'quota' | 'network' | 'model' | 'photo' | 'other';
 
@@ -45,6 +45,7 @@ export function mapPhotoJson(j: Record<string, any>): ProductData {
     protein: num(raw.protein),
     fiber: num(raw.fiber),
     kcal: num(raw.kcal),
+    carbs: num(raw.carbs),
   };
   const hasNutriments = Object.values(nutriments).some((v) => v !== undefined);
   const allergens = Array.isArray(j.allergens)
@@ -170,4 +171,46 @@ export async function readLabelPhoto(file: File, apiKey: string): Promise<Produc
   }
   if (!parsed || typeof parsed !== 'object') throw unreadable();
   return mapPhotoJson(parsed as Record<string, any>);
+}
+
+/** A plain-English explanation of a product's ingredients, written by the AI. */
+export type AiExplanation = { overview: string; ingredients: { name: string; what: string; note?: string }[] };
+
+const EXPLAIN_INSTRUCTION = `You explain packaged food to a shopper in plain, calm English.
+Return ONLY JSON: {"overview": string, "ingredients": [{"name": string, "what": string, "note": string or null}]}.
+- overview: 2 or 3 short sentences on what this product is mostly made of and the main things a health-conscious shopper should know.
+- ingredients: at most 8, choosing the ones a shopper is least likely to understand or most likely to care about (additives, E-numbers, sweeteners, oils, sugars, flavourings). "what" says what it is and why it is used, in at most 14 words. "note" is at most 18 words and only for a well-established health or regulatory point; use null if there is none.
+Rules: use only widely accepted facts; if unsure, leave the note out. Never say the product is safe or unsafe for anyone. No medical advice and no claims about treating or preventing disease. Do not mention ingredients that are not in the list. Translate ingredient names to English.`;
+
+/**
+ * Asks Gemini to explain the ingredients. Only product details are sent:
+ * never the user's profile, allergies or history.
+ */
+export async function explainIngredients(product: ProductData, apiKey: string): Promise<AiExplanation> {
+  const facts = {
+    product: product.name,
+    ingredients: product.ingredientsText ?? '',
+    per_100g: product.nutriments ?? {},
+    processing_group_nova: product.novaGroup ?? null,
+  };
+  const body = await generate(apiKey, {
+    contents: [{ parts: [{ text: `${EXPLAIN_INSTRUCTION}\n\nProduct data:\n${JSON.stringify(facts)}` }] }],
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.2 },
+  });
+  const fail = () => new PhotoError('The AI didn’t give a usable answer this time. Please try again.');
+  let parsed: any;
+  try {
+    const text: string = (body?.candidates?.[0]?.content?.parts ?? []).map((p: { text?: string }) => p.text ?? '').join('');
+    parsed = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
+  } catch {
+    throw fail();
+  }
+  const clean = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+  const overview = clean(parsed?.overview, 600);
+  const ingredients = (Array.isArray(parsed?.ingredients) ? parsed.ingredients : [])
+    .map((i: any) => ({ name: clean(i?.name, 60), what: clean(i?.what, 160), note: clean(i?.note, 200) || undefined }))
+    .filter((i: { name: string; what: string }) => i.name && i.what)
+    .slice(0, 8);
+  if (!overview) throw fail();
+  return { overview, ingredients };
 }

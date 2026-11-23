@@ -1,4 +1,5 @@
 import type { Profile, ProductData, Score } from '../types';
+import { avoidHits } from './verdict';
 
 /** Personal score engine. Pure, deterministic, no network, no AI. */
 
@@ -75,6 +76,22 @@ export function computeScore(product: ProductData, profile: Profile): Score | nu
     if (n.salt !== undefined && n.salt > 0.6) {
       adjust(n.salt > 1.5 ? -20 : -10, `too salty for your low-salt profile (${fmt(n.salt)}g salt per 100g).`);
     }
+  }
+
+  if (profile.watch.includes('cholesterol')) {
+    if (n.saturatedFat !== undefined && n.saturatedFat > 5) {
+      adjust(n.saturatedFat > 10 ? -20 : -10, `high saturated fat for your cholesterol watch (${fmt(n.saturatedFat)}g per 100g).`);
+    }
+  }
+
+  if (profile.watch.includes('low-carb')) {
+    if (n.carbs !== undefined && n.carbs > 20) {
+      adjust(n.carbs > 50 ? -20 : -10, `high in carbohydrates for your low-carb goal (${fmt(n.carbs)}g per 100g).`);
+    }
+  }
+
+  for (const hit of avoidHits(product, profile)) {
+    adjust(-10, `contains ${hit.label}, which you prefer to avoid.`);
   }
 
   if (profile.goal === 'lose-weight') {
