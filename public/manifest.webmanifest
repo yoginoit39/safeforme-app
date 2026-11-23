@@ -1,0 +1,20 @@
+{
+  "id": "./",
+  "name": "SafeForMe",
+  "short_name": "SafeForMe",
+  "description": "Scan food. See if it is safe for you, with a personal health score.",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["food", "health", "lifestyle"],
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fff7e8",
+  "theme_color": "#fff7e8",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
