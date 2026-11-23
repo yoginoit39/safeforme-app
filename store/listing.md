@@ -49,7 +49,7 @@ Food & Drink (alternative: Health & Fitness)
 - screenshots/1-home … 6-profile — 1200×2400 phone screenshots (made-up products, no real brands)
 
 ## Declarations — suggested answers (confirm each in Play Console)
-- Privacy policy URL: https://<your-site>/privacy.html
+- Privacy policy URL: https://yoginoit39.github.io/safeforme-app/privacy.html
 - Ads: No
 - App access: all features available without login
 - Data safety: no data collected or shared by the developer. Note for the form: barcode numbers go to Open Food Facts and optional label photos go to Google under the user's own key, both sent straight from the device, not to the developer.
