@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vitest/config';
 
 // Production-only Content-Security-Policy: the browser itself refuses any
@@ -32,8 +33,27 @@ function cspPlugin(): Plugin {
   };
 }
 
+/** Local development only: receives the self-test report from the browser and saves it to a file. */
+function selfTestPlugin(): Plugin {
+  return {
+    name: 'selftest-report',
+    apply: 'serve',
+    configureServer(server) {
+      server.middlewares.use('/__selftest', (req, res) => {
+        let body = '';
+        req.on('data', (c) => (body += c));
+        req.on('end', () => {
+          mkdirSync('e2e-results', { recursive: true });
+          writeFileSync('e2e-results/selftest.json', body);
+          res.end('ok');
+        });
+      });
+    },
+  };
+}
+
 export default defineConfig({
   base: './',
-  plugins: [cspPlugin()],
+  plugins: [cspPlugin(), selfTestPlugin()],
   test: { include: ['tests/**/*.test.ts'] },
 });

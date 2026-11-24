@@ -15,8 +15,35 @@ const API = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MODELS = ['gemini-3.5-flash-lite', 'gemini-2.5-flash-lite'];
 let workingModel: string | null = null;
 
+/** Which model answered the last successful request (for diagnostics). */
+export const lastModelUsed = (): string | null => workingModel;
+
 const INSTRUCTION =
-  'Read this food label photo (any language). Return ONLY JSON: {product_name, ingredients_text (translated to English), allergens: [..], nutriments per 100g if shown: {sugars, salt, saturated_fat, fat, protein, fiber, kcal, carbs}, contains_pork, contains_alcohol, contains_gelatin, halal_certified, kosher_certified}. Use null for anything not visible. Do not guess.';
+  'Read this food label photo (any language). Return ONLY JSON: {product_name, ingredients_text (translated to English), allergens: [..], traces: [..], nutriments: {sugars, salt, saturated_fat, fat, protein, fiber, kcal, carbs}, contains_pork, contains_alcohol, contains_gelatin, halal_certified, kosher_certified}. "allergens" are allergens the product contains as ingredients; "traces" are allergens mentioned only as "may contain" or "traces of". "nutriments" are per 100g or 100ml as numbers without units (use kcal, not kJ; a comma is a decimal point); if the label only gives per-serving values, use null. halal_certified and kosher_certified are true only if a certification mark or statement is visible. Use null for anything not visible. Do not guess.';
+
+/** Forces the reply into exactly this shape, so field names never vary between models. */
+const NUM = { type: 'NUMBER', nullable: true };
+const BOOL = { type: 'BOOLEAN', nullable: true };
+const LABEL_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    product_name: { type: 'STRING', nullable: true },
+    ingredients_text: { type: 'STRING', nullable: true },
+    allergens: { type: 'ARRAY', items: { type: 'STRING' } },
+    traces: { type: 'ARRAY', items: { type: 'STRING' } },
+    nutriments: {
+      type: 'OBJECT',
+      nullable: true,
+      properties: { sugars: NUM, salt: NUM, saturated_fat: NUM, fat: NUM, protein: NUM, fiber: NUM, kcal: NUM, carbs: NUM },
+    },
+    contains_pork: BOOL,
+    contains_alcohol: BOOL,
+    contains_gelatin: BOOL,
+    halal_certified: BOOL,
+    kosher_certified: BOOL,
+  },
+  required: ['product_name', 'ingredients_text', 'allergens', 'traces', 'nutriments'],
+};
 
 export type PhotoErrorKind = 'key' | 'quota' | 'network' | 'model' | 'photo' | 'other';
 
@@ -36,20 +63,25 @@ const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : 
 
 /** Converts the model's JSON into the same product shape Open Food Facts lookups produce. */
 export function mapPhotoJson(j: Record<string, any>): ProductData {
-  const raw = j.nutriments && typeof j.nutriments === 'object' ? j.nutriments : {};
+  // Tolerate other spellings of the nutrition block (models have answered with "nutriments_per_100g").
+  const nutriKey = Object.keys(j).find((k) => /^nutri/i.test(k) && j[k] && typeof j[k] === 'object');
+  const raw = nutriKey ? j[nutriKey] : {};
   const nutriments: Nutriments = {
     sugars: num(raw.sugars),
     salt: num(raw.salt),
-    saturatedFat: num(raw.saturated_fat),
+    saturatedFat: num(raw.saturated_fat ?? raw.saturatedFat ?? raw.saturates),
     fat: num(raw.fat),
     protein: num(raw.protein),
     fiber: num(raw.fiber),
     kcal: num(raw.kcal),
-    carbs: num(raw.carbs),
+    carbs: num(raw.carbs ?? raw.carbohydrates),
   };
   const hasNutriments = Object.values(nutriments).some((v) => v !== undefined);
   const allergens = Array.isArray(j.allergens)
     ? [...new Set(j.allergens.filter((a: unknown): a is string => typeof a === 'string' && !!a.trim()).map(normalizeAllergenName))]
+    : [];
+  const traces: string[] = Array.isArray(j.traces)
+    ? [...new Set<string>(j.traces.filter((a: unknown): a is string => typeof a === 'string' && !!a.trim()).map(normalizeAllergenName))]
     : [];
   const text = typeof j.ingredients_text === 'string' && j.ingredients_text.trim() ? j.ingredients_text.trim() : undefined;
   const name = typeof j.product_name === 'string' && j.product_name.trim() ? j.product_name.trim() : 'Label photo';
@@ -57,8 +89,9 @@ export function mapPhotoJson(j: Record<string, any>): ProductData {
   return {
     name,
     ingredientsText: text,
+    // An allergen listed both ways counts as contained.
     allergens: allergens as string[],
-    traces: [],
+    traces: traces.filter((t) => !(allergens as string[]).includes(t)),
     labels: [],
     nutriments: hasNutriments ? nutriments : undefined,
     photoFlags: {
@@ -114,22 +147,27 @@ async function toError(res: Response): Promise<PhotoError> {
   if (res.status === 400) {
     return new PhotoError('Google couldn’t process that. Try again with a clearer photo.', 'photo');
   }
+  if (res.status === 503 || res.status === 500) {
+    return new PhotoError('Google’s AI is busy right now. Wait a few seconds and try again.', 'network');
+  }
   return new PhotoError(`Google’s AI service had a problem (error ${res.status}). Try again in a moment.`);
 }
 
 /** Calls Gemini with the user's key. The key goes in a header, to Google only. */
 async function generate(apiKey: string, body: unknown): Promise<any> {
   const order = workingModel ? [workingModel, ...MODELS.filter((m) => m !== workingModel)] : MODELS;
+  const send = (model: string) =>
+    fetch(`${API}/${model}:generateContent`, {
+      method: 'POST',
+      referrerPolicy: 'no-referrer',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+      body: JSON.stringify(body),
+    });
   let last: Response | null = null;
   for (const model of order) {
     let res: Response;
     try {
-      res = await fetch(`${API}/${model}:generateContent`, {
-        method: 'POST',
-        referrerPolicy: 'no-referrer',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify(body),
-      });
+      res = await send(model);
     } catch {
       throw new PhotoError('Couldn’t reach Google. Check your connection and try again.', 'network');
     }
@@ -138,7 +176,22 @@ async function generate(apiKey: string, body: unknown): Promise<any> {
       return res.json();
     }
     last = res;
-    if (res.status !== 404) break; // only "model not found" is worth trying the next model for
+    // Google is overloaded (500/503): give this model one more go after a short pause, then move to the next model.
+    if (res.status === 503 || res.status === 500) {
+      await new Promise((r) => setTimeout(r, 1500));
+      try {
+        const again = await send(model);
+        if (again.ok) {
+          workingModel = model;
+          return again.json();
+        }
+        last = again;
+      } catch {
+        // fall through to the next model
+      }
+      continue;
+    }
+    if (res.status !== 404) break; // "model not found" is the only other reason to try the next model
   }
   throw await toError(last!);
 }
@@ -155,7 +208,7 @@ export async function readLabelPhoto(file: File, apiKey: string): Promise<Produc
   const data = await toJpegBase64(file);
   const body = await generate(apiKey, {
     contents: [{ parts: [{ text: INSTRUCTION }, { inline_data: { mime_type: 'image/jpeg', data } }] }],
-    generationConfig: { responseMimeType: 'application/json', temperature: 0 },
+    generationConfig: { responseMimeType: 'application/json', responseSchema: LABEL_SCHEMA, temperature: 0 },
   });
 
   const unreadable = () =>

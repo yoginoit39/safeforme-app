@@ -194,6 +194,18 @@ describe('data mapping', () => {
     expect(computeScore(p, profile({ watch: ['diabetes'] }))!.value).toBe(15);
   });
 
+  it('label photo: traces stay traces, and odd nutrition field names are still read', () => {
+    const p = mapPhotoJson({
+      product_name: 'Biscuits', ingredients_text: 'Wheat flour, sugar, peanuts. May contain traces of nuts and sesame.',
+      allergens: ['gluten', 'peanuts'], traces: ['nuts', 'sesame', 'peanuts'],
+      nutriments_per_100g: { sugars: 28, salt: '0,6', saturated_fat: 9, fat: 24, protein: 8, kcal: 480 },
+    });
+    expect(p.allergens).toEqual(['gluten', 'peanuts']);
+    expect(p.traces).toEqual(['nuts', 'sesame-seeds']);
+    expect(p.nutriments).toMatchObject({ sugars: 28, salt: 0.6, saturatedFat: 9, fat: 24, protein: 8, kcal: 480 });
+    expect(computeVerdict(p, profile({ allergies: ['tree-nuts'] })).reasons[0]).toBe('May contain traces of tree nuts.');
+  });
+
   it("an unreadable photo is CAN'T CONFIRM, never SAFE", () => {
     const p = mapPhotoJson({ product_name: null, ingredients_text: null, allergens: [] });
     expect(computeVerdict(p, EMPTY_PROFILE).level).toBe('unknown');
