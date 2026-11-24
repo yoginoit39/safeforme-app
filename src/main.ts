@@ -1,6 +1,7 @@
 import '@fontsource-variable/fraunces/wght.css';
 import './style.css';
 import { App as NativeApp } from '@capacitor/app';
+import { Haptics, NotificationType } from '@capacitor/haptics';
 import type { HistoryEntry, ProductData, Profile, Verdict } from './types';
 import { computeVerdict } from './engine/verdict';
 import { bandFor, computeScore, fmt } from './engine/score';
@@ -161,7 +162,13 @@ function openResult(product: ProductData, fresh: boolean) {
     const level = computeVerdict(product, profile).level;
     addHistory(product);
     recordScan(level === 'not-safe');
-    navigator.vibrate?.(level === 'not-safe' ? [90, 60, 90] : 30);
+    // A physical cue for the verdict: native haptics in the store apps, vibration in browsers that have it.
+    if (isNativeApp()) {
+      const type = level === 'not-safe' ? NotificationType.Error : level === 'unknown' ? NotificationType.Warning : NotificationType.Success;
+      void Haptics.notification({ type }).catch(() => undefined);
+    } else {
+      navigator.vibrate?.(level === 'not-safe' ? [90, 60, 90] : 30);
+    }
   }
   animateScore = true;
   go('result');
@@ -765,7 +772,7 @@ function settingsView(): string {
       <p>${ATTRIBUTION}</p>
       <p>${DISCLAIMER}</p>
       <p class="hint">No account, no tracking. Your profile, history and key never leave this browser.</p>
-      <p><a href="./privacy.html">Privacy &amp; terms</a></p>
+      <p><a href="./privacy.html">Privacy &amp; terms</a> · <a href="./support.html">Help &amp; support</a></p>
     </section>
     <section class="card">
       <h2>Your data</h2>
