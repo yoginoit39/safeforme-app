@@ -10,16 +10,17 @@ against Apple's pages today. App Store Connect shows the exact limits as you typ
 - Devices: iPhone only
 
 ## Name (max 30)
-Greenlit: Food Scanner
+Greenlit: Ingredient Scanner
+(28 characters. Owner has not confirmed the name: alternatives are "Greenlit: Label Scanner" or keeping "Greenlit: Food Scanner".)
 
 ## Subtitle (max 30)
-Is it safe for you?
+Food, cosmetics, supplements
 
 ## Promotional text (max 170)
-Scan any food and get an answer made for you: safe or not for your allergies and diet, a personal health score, and a plain-English reason why. Free, no account.
+Scan food, cosmetics, supplements or pet food and see what's in it, checked against your allergies, diet, family and pets, with the source for every flag. Free, no account.
 
 ## Keywords (max 100, comma separated, no spaces)
-allergy,halal,vegan,gluten,nutrition,ingredients,barcode,diabetes,kosher,additives,lactose,coeliac
+allergy,halal,vegan,gluten,barcode,cosmetics,supplement,vitamins,pet,baby,diabetes,kosher,e-number
 
 ## Description
 Use the "Full description" text from `store/listing.md` (same app, same wording).
@@ -63,9 +64,11 @@ The build already declares `ITSAppUsesNonExemptEncryption = NO` (only standard H
 
 ```
 Greenlit needs no account. All core features work immediately:
-1. Open the app, tap "Skip for now" (or set up a profile).
+1. Open the app and tap "Start scanning" (or set up a profile first).
 2. Tap a sample product under "Try a sample product", or type barcode 3017620422003 and tap Look up.
-3. You get a safety verdict, a personal score, and a "Why" explanation.
+3. You see how the listed ingredients fit the profile, a personal score for food, and a "Why" explanation with named, linked sources.
+   The app describes ingredients against the user's stated needs and published guidance. It does not rate products as safe or unsafe;
+   every rule and source is listed at https://yoginoit39.github.io/safeforme-app/how.html
 4. "Scan a product" uses the camera to read barcodes on the device.
 
 Two optional extras ("AI extras": photographing a label, and an AI explanation of ingredients)
@@ -83,7 +86,7 @@ Without a key the reviewer cannot try the optional extras, which is a common rea
 ## Things Apple may ask about
 - **Guideline 4.2 (minimum functionality / web wrapper):** the app uses the camera, works offline for saved scans,
   processes everything on the device and has native haptics. If questioned, say exactly that.
-- **Guideline 1.4.1 (health):** information only, sources named, disclaimers on every result.
+- **Guideline 1.4.1 (health):** information only, no safety verdicts, sources named and linked, disclaimers on every result. Supplement dose checks use official upper intake levels (Health Canada / US National Academies); child guidance restates US CDC and UK NHS pages; infant formula is never scored or compared. Full method: how.html.
 - **Guideline 5.1.1 (privacy):** no account, no tracking, privacy policy linked in the app.
 
 ## Tonight, in order

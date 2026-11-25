@@ -484,7 +484,7 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
     return { level: 'caution', reasons: [...concerns, ...avoid], warnings: warnings.filter((w) => !avoid.includes(w)) };
   }
   if (needs.length && hasText) {
-    return { level: 'safe', reasons: [`${capital(listOf(needs))} ${needs.length > 1 ? 'are' : 'is'} not in the ingredient list or the allergen tags${fromPhoto ? ' read from your photo' : ''}.`], warnings };
+    return { level: 'safe', reasons: [`${capital(listOf(needs))} ${needs.length > 1 || /s$/.test(needs[0]) ? 'are' : 'is'} not in the ingredient list or the allergen tags${fromPhoto ? ' read from your photo' : ''}.`], warnings };
   }
   return { level: 'safe', reasons: ['No problems found for your profile.'], warnings };
 }

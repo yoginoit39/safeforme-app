@@ -66,7 +66,7 @@ Food & Drink (alternative: Health & Fitness)
 ## Graphics (in this folder)
 - icon-512.png — app icon
 - feature-graphic.png — 1024×500 banner
-- screenshots/1-home … 6-profile — 1200×2400 phone screenshots (made-up products, no real brands)
+- screenshots/ — 1200×2400 phone screenshots: 1-home, 2-family, 3-not-ideal, 3b-score, 4-cosmetics, 5-supplement, 6-profile (invented products, no real brands). Remake with: node store/make-screenshots.mjs
 
 ## Declarations — suggested answers (confirm each in Play Console)
 - Privacy policy URL: https://yoginoit39.github.io/safeforme-app/privacy.html

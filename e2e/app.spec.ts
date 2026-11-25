@@ -44,7 +44,7 @@ test('barcode → verdict → score, for each kind of answer', async ({ page }, 
   await lookup(page, '8076800195057');
   // An allergy is in the profile: the app reports what it checked and never promises "safe".
   await expect(page.locator('.verdict__title')).toHaveText('No allergens found');
-  await expect(page.locator('.verdict__reasons')).toContainText('Tree nuts is not in the ingredient list');
+  await expect(page.locator('.verdict__reasons')).toContainText('Tree nuts are not in the ingredient list');
   await expect(page.locator('.verdict__warning').first()).toContainText('read the pack every time');
   await expect(page.locator('.verdict__action')).toContainText('Check against my pack');
   await expect(page.locator('#score-num')).toHaveText('90');

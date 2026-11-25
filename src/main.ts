@@ -770,7 +770,7 @@ function scanView(): string {
     : `<button class="btn btn--primary btn--scan" data-action="scan-start" ${busy ? 'disabled' : ''}>
         <span class="hero__art" aria-hidden="true"><i></i><i></i><i></i><b></b></span>
         <span class="hero__title">Scan a<br />product</span>
-        <small>Food, cosmetics or pet food</small>
+        <small>Food, cosmetics, supplements or pet food</small>
         <span class="hero__cta">${icon('scan')}Tap to scan</span>
       </button>`;
 
