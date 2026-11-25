@@ -45,7 +45,7 @@ async function searchClassic(q: string, kind: ProductKind, lang: string, signal:
   const url = `${HOSTS[kind]}/cgi/search.pl?search_terms=${encodeURIComponent(q)}&search_simple=1&action=process&json=1&page_size=24&fields=${fields(lang)}`;
   const json = await getJson(url, signal);
   const hits = (Array.isArray(json?.products) ? json.products : []).map((p: any) => toHit(p, kind, lang)).filter(Boolean) as SearchHit[];
-  return inLangFirst(hits, lang, 6);
+  return inLangFirst(hits, lang, kind === 'food' ? 12 : 6);
 }
 
 /**
@@ -59,7 +59,8 @@ export async function searchByName(query: string, lang = 'en'): Promise<SearchHi
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     const results = await Promise.allSettled([
-      searchFood(q, lang, controller.signal),
+      // The fast food search only answers web pages, not the iPhone app. The classic search answers both.
+      searchFood(q, lang, controller.signal).catch(() => searchClassic(q, 'food', lang, controller.signal).then((hits) => hits.slice(0, 12))),
       searchClassic(q, 'beauty', lang, controller.signal),
       searchClassic(q, 'petfood', lang, controller.signal),
     ]);

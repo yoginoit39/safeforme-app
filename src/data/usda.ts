@@ -44,6 +44,29 @@ export function mapUsdaFood(barcode: string, f: Record<string, any>): ProductDat
 }
 
 /** USDA stores barcodes zero-padded to 14 digits (GTIN-14), or as printed. */
+/** How the last successful request carried the key: useful when testing on a real phone. */
+export let usdaKeyVia: 'header' | 'address' | null = null;
+
+/**
+ * The key normally travels in a header. A header makes the phone ask the server for permission
+ * before the real request, one more step that can fail (it did once on a real iPhone, then worked).
+ * USDA also accepts the key in the address, which needs no permission step, so that is the fallback.
+ */
+async function get(url: string, signal: AbortSignal): Promise<Response> {
+  if (usdaKeyVia !== 'address') {
+    try {
+      const res = await fetch(url, { headers: { 'X-Api-Key': KEY }, referrerPolicy: 'no-referrer', signal });
+      usdaKeyVia = 'header';
+      return res;
+    } catch (e) {
+      if (signal.aborted) throw e;
+    }
+  }
+  const res = await fetch(`${url}&api_key=${encodeURIComponent(KEY)}`, { referrerPolicy: 'no-referrer', signal });
+  usdaKeyVia = 'address';
+  return res;
+}
+
 export async function lookupUsda(barcode: string): Promise<ProductData | null> {
   if (!usdaEnabled()) return null;
   const candidates = [...new Set([barcode.padStart(14, '0'), barcode, barcode.padStart(12, '0')])];
@@ -52,7 +75,7 @@ export async function lookupUsda(barcode: string): Promise<ProductData | null> {
   try {
     for (const gtin of candidates) {
       const url = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(`gtinUpc:${gtin}`)}&dataType=Branded&pageSize=1`;
-      const res = await fetch(url, { headers: { 'X-Api-Key': KEY }, referrerPolicy: 'no-referrer', signal: controller.signal });
+      const res = await get(url, controller.signal);
       if (!res.ok) return null;
       const food = (await res.json())?.foods?.[0];
       if (food && String(food.gtinUpc ?? '').replace(/^0+/, '') === barcode.replace(/^0+/, '')) return mapUsdaFood(barcode, food);

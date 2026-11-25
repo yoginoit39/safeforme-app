@@ -1863,6 +1863,8 @@ render();
 
 // Local development only: http://localhost:<port>/#selftest runs a real label-photo check with the saved key.
 if (import.meta.env.DEV && location.hash === '#selftest') void import('./selftest').then((m) => m.runSelfTest());
+// Test copies only (VITE_DEVICE_TEST=1): run the on-device checks shortly after start.
+if (import.meta.env.VITE_DEVICE_TEST === '1') setTimeout(() => void import('./devicetest').then((m) => m.runDeviceTest()), 2500);
 
 // Get the camera decoder ready in the background once the first screen is up.
 setTimeout(prewarmScanner, 1500);
