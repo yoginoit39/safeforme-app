@@ -4,9 +4,10 @@ import { App as NativeApp } from '@capacitor/app';
 import { Haptics, NotificationType } from '@capacitor/haptics';
 import type { HistoryEntry, Member, ProductData, ProductKind, Profile, StackItem, Verdict } from './types';
 import { LIMITS_SOURCE, computeSupplementVerdict, dailyTotals, doseText, limitKey, supplementNotes, type AgeBand } from './engine/supplements';
-import { childConcerns, isUnder4, withChildChecks } from './engine/children';
+import { childConcerns, isInfantFormula, isUnder4, withChildChecks } from './engine/children';
 import { recallFor, type Recall } from './data/recalls';
 import { countryTag, findAlternatives } from './data/alternatives';
+import { pickAlternatives, type Alt } from './engine/alternatives';
 import { allergyNeeds, computeVerdict } from './engine/verdict';
 import { beautyFlags, computeBeautyVerdict } from './engine/beauty';
 import { computePetVerdict, petFoodSpecies, type Species } from './engine/pets';
@@ -15,7 +16,8 @@ import { explain, type Explanation } from './engine/explain';
 import { DEMO_EMOJI, DEMO_PRODUCTS, SAMPLE_BARCODES } from './data/demo';
 import { LookupError, lookupBarcode, lookupIn, setLookupLang } from './data/off';
 import { cutoutFor, type Cutout } from './cutout';
-import { parseIngredients } from './ingredients';
+import { eNumberName } from './enumbers';
+import { isMicronutrient, parseIngredients, plainNutrient } from './ingredients';
 import { langName } from './lang';
 import { searchByName, type SearchHit } from './data/search';
 import { PhotoError, explainIngredients, readLabelPhoto, testKey, type AiExplanation } from './data/gemini';
@@ -32,6 +34,37 @@ const DISCLAIMER =
 
 const ATTRIBUTION =
   'Product data: <a href="https://world.openfoodfacts.org" target="_blank" rel="noopener noreferrer">Open Food Facts</a> (ODbL)';
+
+/** Where each named authority's statement can be read. Only pages checked to exist are listed. */
+const SOURCE_URLS: [string, string][] = [
+  ['Health Canada / US National Academies Dietary Reference Intakes', 'https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/dietary-reference-intakes/tables/reference-values-vitamins.html'],
+  ['US National Center for Complementary and Integrative Health', 'https://www.nccih.nih.gov/health/st-johns-wort'],
+  ['ASPCA Animal Poison Control', 'https://www.aspca.org/pet-care/animal-poison-control/people-foods-avoid-feeding-your-pets'],
+  ['EU Cosmetics Regulation 1223/2009', 'https://eur-lex.europa.eu/eli/reg/2009/1223/oj'],
+  ['EU Cosmetics Regulation', 'https://eur-lex.europa.eu/eli/reg/2009/1223/oj'],
+  ['US Food and Drug Administration', 'https://www.fda.gov/consumers/consumer-updates/spilling-beans-how-much-caffeine-too-much'],
+  ['Minamata Convention on Mercury', 'https://minamataconvention.org/en'],
+  ['Minamata Convention', 'https://minamataconvention.org/en'],
+  ['NOVA classification', 'https://world.openfoodfacts.org/nova'],
+  ['Health Canada', 'https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-additives/caffeine-foods.html'],
+  ['US CDC', 'https://www.cdc.gov/infant-toddler-nutrition/foods-and-drinks/foods-and-drinks-to-avoid-or-limit.html'],
+  ['NHS', 'https://www.nhs.uk/conditions/baby/weaning-and-feeding/foods-to-avoid-giving-babies-and-young-children/'],
+];
+const SOURCE_RE = new RegExp(`${SOURCE_URLS.map(([name]) => name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join('|')}|EU Regulation (\\d+)/(\\d+)|\\(US FDA\\)`, 'g');
+
+/** Escapes text, then turns each named source into a link to the page that says it. */
+function rich(text: string): string {
+  return esc(text).replace(SOURCE_RE, (hit, a?: string, b?: string) => {
+    if (hit === '(US FDA)') return `(${link('https://www.fda.gov/consumers/consumer-updates/spilling-beans-how-much-caffeine-too-much', 'US FDA')})`;
+    if (a && b) {
+      // Newer rules are written year/number, older ones number/year.
+      const [year, num] = Number(a) > 1900 ? [a, b] : [b, a];
+      return link(`https://eur-lex.europa.eu/eli/reg/${year}/${num}/oj`, hit);
+    }
+    const url = SOURCE_URLS.find(([name]) => name === hit)?.[1];
+    return url ? link(url, hit) : hit;
+  });
+}
 
 /** The databases are edited by volunteers. A wrong entry is fixed at the source, for everyone. */
 function fixLink(p: ProductData): string {
@@ -63,8 +96,8 @@ const ALLERGY_OPTS: [string, string][] = [
   ['celery', 'Celery'], ['mustard', 'Mustard'], ['lupin', 'Lupin'], ['sulphites', 'Sulphites'],
 ];
 const RULE_OPTS: [string, string, string][] = [
-  ['halal', 'Halal', 'Flags pork and alcohol. Only certified products can show SAFE.'],
-  ['kosher', 'Kosher', 'Flags pork and shellfish. Only certified products can show SAFE.'],
+  ['halal', 'Halal', 'Flags pork and alcohol. Only certified products show “Fits your profile”.'],
+  ['kosher', 'Kosher', 'Flags pork and shellfish. Only certified products show “Fits your profile”.'],
   ['vegan', 'Vegan', 'Flags any animal ingredient.'],
   ['vegetarian', 'Vegetarian', 'Flags meat, fish and gelatin.'],
   ['pregnancy', 'Pregnancy', 'Flags alcohol, warns on caffeine.'],
@@ -95,8 +128,9 @@ const GOAL_OPTS: [Profile['goal'], string][] = [
   ['none', 'No goal'], ['lose-weight', 'Lose weight'], ['build-muscle', 'Build muscle'], ['eat-cleaner', 'Eat cleaner'],
 ];
 
-const VERDICT_TITLE = { safe: 'Safe for you', caution: 'Not ideal for you', 'not-safe': 'Not safe', unknown: 'Check the label' } as const;
-const VERDICT_SHORT = { safe: 'Safe', caution: 'Not ideal', 'not-safe': 'Not safe', unknown: 'Check label' } as const;
+// The words describe how a product fits the profile. They are not a judgement of the product itself.
+const VERDICT_TITLE = { safe: 'Nothing flagged', caution: 'Not ideal for you', 'not-safe': 'Not for you', unknown: 'Check the label' } as const;
+const VERDICT_SHORT = { safe: 'Nothing flagged', caution: 'Not ideal', 'not-safe': 'Not suitable', unknown: 'Check label' } as const;
 const ICONS = {
   scan: '<path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2M7.5 12h9"/>',
   history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
@@ -136,8 +170,7 @@ let photoFor: string | null = null;
 /** Supplements taken daily, for adding doses up across bottles. */
 let stack: StackItem[] = loadStack();
 /** Healthier options found for the open product. */
-type Alt = { product: ProductData; score: number };
-let alts: { for: string; status: 'loading' | 'done' | 'error'; items: Alt[]; local: boolean } | null = null;
+let alts: { for: string; status: 'loading' | 'done' | 'error'; items: Alt[] } | null = null;
 /** FDA recall lookups already done, by barcode. */
 const recallDone = new Map<string, Recall | null>();
 /** Language for product names and ingredient lists. */
@@ -237,7 +270,9 @@ function verdictTitle(level: Verdict['level'], kind: ProductKind, allergy = fals
   // With an allergy in the profile the app reports what it checked. It does not promise "safe".
   if (level === 'safe' && allergy && (kind === 'food' || kind === 'supplement')) return 'No allergens found';
   if (level === 'safe' && kind === 'beauty') return 'No red flags';
-  if (level === 'safe' && kind === 'petfood') return 'Safe for your pet';
+  if (level === 'safe' && kind === 'petfood') return 'No toxins found';
+  if (level === 'not-safe' && kind === 'petfood') return 'Not for your pet';
+  if (level === 'safe' && kind === 'food' && profileSummary(profile)) return 'Fits your profile';
   if (level === 'safe' && kind === 'supplement') return 'No concerns found';
   return VERDICT_TITLE[level];
 }
@@ -608,11 +643,11 @@ function welcomeView(): string {
   return `
     <div class="welcome">
       <div class="welcome__mark">${icon('check')}</div>
-      <h1>Is this safe for <em>you</em>?</h1>
+      <h1>What’s in it, for <em>you</em>?</h1>
       <ul class="welcome__points">
         <li><span>${icon('profile')}</span><div><strong>Tell us what to watch for</strong><small>Allergies, halal, vegan, diabetes, pregnancy, goals. Add family and pets too.</small></div></li>
         <li><span>${icon('scan')}</span><div><strong>Scan any barcode</strong><small>Food, cosmetics and pet food. Or search by name.</small></div></li>
-        <li><span>${icon('shield')}</span><div><strong>Get your answer instantly</strong><small>Safe or Not safe, with the reason. Food also gets a health score made for you.</small></div></li>
+        <li><span>${icon('shield')}</span><div><strong>See it in plain words</strong><small>What’s inside, checked against your needs, with the source for every flag.</small></div></li>
       </ul>
       <button class="btn btn--primary btn--big" data-action="onboard-skip">Start scanning</button>
       <button class="btn btn--secondary btn--big" data-action="onboard-start">Set up my profile first · 30 seconds</button>
@@ -762,7 +797,7 @@ function scanView(): string {
     : `<section class="samples samples--open"><h2>Nothing to scan right now? Try one</h2>${samplesHtml()}</section>`;
 
   return `
-    <h1 class="title">Is it safe <em>for you?</em></h1>
+    <h1 class="title">What’s in it, <em>for you?</em></h1>
     ${profileLine}
     ${scanner}
     ${noticeHtml()}
@@ -835,14 +870,14 @@ function whyHtml(why: Explanation, p: ProductData): string {
         <h2>How processed is it?</h2>
         <div class="nova" role="img" aria-label="Processing level ${proc.group} of 4">${[1, 2, 3, 4].map((g) => `<span class="nova__step nova__step--${g} ${g === proc.group ? 'is-on' : ''}">${g}</span>`).join('')}</div>
         <div class="nova__title">${esc(proc.title)}${proc.estimated ? ' <span class="tag">estimate</span>' : ''}</div>
-        <p>${esc(proc.text)}</p>
-        ${proc.source ? `<p class="source">Source: ${esc(proc.source)}</p>` : ''}
+        <p>${rich(proc.text)}</p>
+        ${proc.source ? `<p class="source">Source: ${rich(proc.source)}</p>` : ''}
       </section>`
     : '';
   const notable = why.ingredients.length
     ? `<section class="card">
         <h2>Ingredients to know about</h2>
-        <ul class="notable">${why.ingredients.map((f) => `<li><strong>${esc(f.name)}</strong><p>${esc(f.note)}</p>${f.source ? `<p class="source">Source: ${esc(f.source)}</p>` : ''}</li>`).join('')}</ul>
+        <ul class="notable">${why.ingredients.map((f) => `<li><strong>${esc(f.name)}</strong><p>${rich(f.note)}</p>${f.source ? `<p class="source">Source: ${rich(f.source)}</p>` : ''}</li>`).join('')}</ul>
         <p class="hint">These notes report what official bodies have decided. They are information, not a diagnosis or medical advice.</p>
       </section>`
     : '';
@@ -896,7 +931,7 @@ function familyHtml(p: ProductData): string {
   for (const m of people()) {
     const v = verdictForPerson(p, m.profile, m.age ?? 'adult');
     const clean = v.level === 'safe' && kind !== 'beauty' && allergyNeeds(m.profile).length > 0;
-    const young = isUnder4(m.age ?? 'adult') && kind === 'food' && v.level === 'safe';
+    const young = isUnder4(m.age ?? 'adult') && kind === 'food' && v.level === 'safe' && !isInfantFormula(p);
     // "Not safe" is the wrong word for a biscuit: when age is the only reason, say that.
     const ageOnly = v.level === 'not-safe' && kind === 'food' && childConcerns(p, m.age ?? 'adult').notForAge.length > 0 && computeVerdict(p, m.profile).level !== 'not-safe';
     // For the youngest, a clean result still can't see texture: say so rather than show a bare green dot.
@@ -905,7 +940,7 @@ function familyHtml(p: ProductData): string {
   if (kind === 'food' || kind === 'supplement') {
     for (const m of pets()) {
       const v = computePetVerdict(p, m.kind as Species);
-      const status = v.level === 'not-safe' ? 'Not safe' : p.ingredientsText ? 'No toxins found' : 'Check label';
+      const status = v.level === 'not-safe' ? 'Not suitable' : p.ingredientsText ? 'No toxins found' : 'Check label';
       rows.push(famRow(`${m.name} (${m.kind})`, v.level, status, v.reasons[0]));
     }
   }
@@ -921,7 +956,7 @@ function familyHtml(p: ProductData): string {
 function famRow(name: string, level: Verdict['level'], status: string, reason: string): string {
   return `<li class="fam__row fam__row--${level}">
     <span class="dot dot--${level}" aria-hidden="true"></span>
-    <div><strong>${esc(name)} · ${esc(status)}</strong><small>${esc(reason)}</small></div>
+    <div><strong>${esc(name)} · ${esc(status)}</strong><small>${rich(reason)}</small></div>
   </li>`;
 }
 
@@ -984,8 +1019,26 @@ function chipTone(p: ProductData, name: string): '' | 'warn' | 'danger' {
   return levels.includes('caution') ? 'warn' : '';
 }
 
+/**
+ * Vitamins and minerals under their everyday names, grouped, with the name printed on the pack
+ * kept small beside each: "Vitamin B6 (pyridoxine hydrochloride)".
+ */
+function nutrientGroups(names: string[], langAttr: string): string {
+  const groups: Record<'vitamin' | 'mineral' | 'other', string[]> = { vitamin: [], mineral: [], other: [] };
+  for (const name of names) {
+    const n = plainNutrient(name);
+    if (!n) continue;
+    const same = n.plain.toLowerCase().startsWith(name.toLowerCase());
+    groups[n.group].push(`<li class="ing__chip ing__chip--nutrient">${esc(n.plain)}${same ? '' : `<small> (${esc(name.toLowerCase())})</small>`}</li>`);
+  }
+  const block = (title: string, chips: string[]) => (chips.length ? `<p class="ing__label">${title}</p><ul class="ing ing--nutrients"${langAttr}>${chips.join('')}</ul>` : '');
+  return block('Vitamins', groups.vitamin) + block('Minerals', groups.mineral) + block('Other nutrients', groups.other);
+}
+
 /** One ingredient as a chip: the name stands out, bracketed detail sits quietly after it. */
-function chipHtml(name: string, tone: string, minor = false): string {
+function chipHtml(raw: string, tone: string, minor = false): string {
+  // A bare code means nothing to most people: "E290" is carbon dioxide.
+  const name = /^(e|ins)\s?-?\d{3,4}[a-z]{0,3}$/i.test(raw.trim()) ? eNumberName(raw.trim().replace(/^ins\s?/i, 'e')) ?? raw : raw;
   const cut = name.search(/\s[([]/);
   const main = cut > 0 ? name.slice(0, cut) : name;
   const rest = cut > 0 ? name.slice(cut) : '';
@@ -1000,24 +1053,31 @@ const MAIN_COUNT = 5;
  */
 function chipsHtml(p: ProductData, list: { items: string[]; notes: string[]; additives: string[] }, langCode?: string): string {
   const langAttr = langCode ? ` lang="${esc(langCode)}"` : '';
-  const toned = list.items.map((name) => ({ name, tone: chipTone(p, name) }));
+  const all = list.items.map((name) => ({ name, tone: chipTone(p, name) }));
   const chip = (c: { name: string; tone: string }) => chipHtml(c.name, c.tone);
+  // Fortified foods and formula list a long tail of vitamins and minerals: group them, don't drown the list in them.
+  const microAll = all.filter((c) => !c.tone && isMicronutrient(c.name));
+  const micro = microAll.length >= 5 ? microAll : [];
+  const toned = micro.length ? all.filter((c) => !micro.includes(c)) : all;
   const short = toned.length <= MAIN_COUNT + 3;
   const main = short ? toned : toned.slice(0, MAIN_COUNT);
   const flagged = short ? [] : toned.slice(MAIN_COUNT).filter((c) => c.tone);
   const hidden = toned.length - main.length - flagged.length;
   const anyTone = toned.some((c) => c.tone);
+  const minorList = (title: string, names: string[]) => `<p class="ing__label">${title}</p><ul class="ing ing--minor"${langAttr}>${names.map((i) => chipHtml(i, '', true)).join('')}</ul>`;
   return `
     <p class="ing__meta">${short ? `${toned.length} ingredient${toned.length === 1 ? '' : 's'} · most first` : 'Mostly made of'}</p>
     <ol class="ing ing--main"${langAttr}>${main.map(chip).join('')}</ol>
     ${flagged.length ? `<p class="ing__meta">Also contains</p><ul class="ing"${langAttr}>${flagged.map(chip).join('')}</ul>` : ''}
     ${anyTone ? `<p class="ing__legend"><i class="ing__dot ing__dot--danger"></i>flagged for you<i class="ing__dot ing__dot--warn"></i>worth knowing</p>` : ''}
     ${!short && !anyTone ? `<p class="ing__clear">Nothing in the rest of the list is flagged for you.</p>` : ''}
+    ${micro.length ? `<p class="ing__clear">Plus ${micro.length} added vitamins, minerals and nutrients, listed by their everyday names below.</p>` : ''}
     ${list.notes.map((n) => `<p class="ing__note"${langAttr}>${esc(n)}</p>`).join('')}
-    ${hidden > 0 || list.additives.length
-      ? `<details class="ing__all"><summary>See all ${toned.length} ingredients</summary>
+    ${hidden > 0 || list.additives.length || micro.length
+      ? `<details class="ing__all"><summary>See all ${all.length} ingredients</summary>
           <ol class="ing"${langAttr}>${toned.map(chip).join('')}</ol>
-          ${list.additives.length ? `<p class="ing__label">Added vitamins &amp; additives</p><ul class="ing ing--minor"${langAttr}>${list.additives.map((i) => chipHtml(i, '', true)).join('')}</ul>` : ''}
+          ${micro.length ? nutrientGroups(micro.map((c) => c.name), langAttr) : ''}
+          ${list.additives.length ? minorList('Added vitamins &amp; additives', list.additives) : ''}
         </details>`
       : ''}`;
 }
@@ -1030,19 +1090,17 @@ function ingredientsBody(p: ProductData): string {
   const raw = p.ingredientsShown ?? p.ingredientsText ?? '';
   const stored = p.ingredientItems?.length ? { items: p.ingredientItems, notes: p.ingredientNotes ?? [], additives: p.ingredientAdditives ?? [] } : null;
   const list = stored ?? parseIngredients(raw);
-  const original = `<details class="ing__raw"><summary>Exact text from the database</summary><p lang="${esc(p.ingredientsLang ?? '')}">${esc(raw)}</p></details>`;
   if (!list.items.length) return `<p>${esc(raw)}</p>`;
   const foreign = !!p.ingredientsLang && p.ingredientsLang !== lang;
-  if (!foreign) return chipsHtml(p, list) + original;
+  if (!foreign) return chipsHtml(p, list);
   const from = langName(p.ingredientsLang);
   if (p.ingredientsTranslated) {
-    const translated = parseIngredients(p.ingredientsTranslated);
-    return `${chipsHtml(p, { ...translated, additives: [] })}
-      <p class="hint">Translated word for word from ${esc(from)} using the database’s ingredient names. The printed label is the authority.</p>
-      <details class="ing__raw"><summary>Original (${esc(from)})</summary><p lang="${esc(p.ingredientsLang ?? '')}">${esc(raw)}</p></details>`;
+    // The database only has this list in another language: show its own English names for each ingredient.
+    return `${chipsHtml(p, { ...parseIngredients(p.ingredientsTranslated), additives: [] })}
+      <p class="hint">The database lists this product in ${esc(from)}; these are its English names for each ingredient.${p.ingredientsUntranslated ? ` ${p.ingredientsUntranslated} item${p.ingredientsUntranslated === 1 ? '' : 's'} had no English name and ${p.ingredientsUntranslated === 1 ? 'is' : 'are'} not shown.` : ''} Check the pack.</p>`;
   }
   return `<p class="hint">Shown in ${esc(from)}: the database has no ${esc(langName(lang))} version of this list.</p>
-    ${chipsHtml(p, list, p.ingredientsLang)}${original}`;
+    ${chipsHtml(p, list, p.ingredientsLang)}`;
 }
 
 const trimNum = (n: number) => (n >= 100 ? String(Math.round(n)) : String(Math.round(n * 100) / 100));
@@ -1052,56 +1110,45 @@ function doseRow(d: ReturnType<typeof dailyTotals>[number]): string {
   const pct = Math.round(d.share * 100);
   const tone = d.share > 1 ? 'over' : d.share > 0.75 ? 'near' : 'ok';
   return `<li class="dose dose--${tone}">
-    <div class="dose__top"><strong>${esc(d.label)}</strong><span>${pct}% of the safe limit</span></div>
+    <div class="dose__top"><strong>${esc(d.label)}</strong><span>${pct}% of the upper limit</span></div>
     <div class="dose__bar"><i style="width:${Math.min(100, Math.max(3, pct))}%"></i></div>
     <small>${esc(doseText(d))}${d.note ? ` (${esc(d.note)})` : ''}</small>
   </li>`;
 }
 
-/** A candidate is only an alternative if it passes for everyone being shopped for and scores clearly better. */
+/** Candidates are judged against everyone being shopped for, on this phone. */
 function goodAlternatives(p: ProductData, candidates: ProductData[]): Alt[] {
-  const mine = computeScore(p, profile)?.value ?? 0;
-  const seen = new Set<string>();
-  const out: Alt[] = [];
-  for (const c of candidates) {
-    if (!c.ingredientsText) continue; // never suggest what can't be checked
-    if (verdictForPerson(c, profile).level !== 'safe') continue;
-    if (people().some((m) => verdictForPerson(c, m.profile, m.age ?? 'adult').level === 'not-safe')) continue;
-    const score = computeScore(c, profile)?.value;
-    if (score === undefined || score < 60 || score < mine + 15) continue;
-    const key = `${c.name.toLowerCase()}|${(c.brand ?? '').toLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({ product: c, score });
-  }
-  return out.sort((a, b) => b.score - a.score).slice(0, 5);
+  return pickAlternatives(p, candidates, {
+    scoreOf: (c) => computeScore(c, profile)?.value,
+    passes: (c) => verdictForPerson(c, profile).level === 'safe' && !people().some((m) => verdictForPerson(c, m.profile, m.age ?? 'adult').level === 'not-safe'),
+  });
 }
 
 async function loadAlternatives(): Promise<void> {
   const p = current;
   if (!p || kindOf(p) !== 'food') return;
   const id = p.barcode ?? p.name;
-  alts = { for: id, status: 'loading', items: [], local: false };
+  alts = { for: id, status: 'loading', items: [] };
   render();
   try {
     const found = await findAlternatives(p, countryTag(navigator.language), (items) => goodAlternatives(p, items).length >= 3);
-    alts = { for: id, status: 'done', items: goodAlternatives(p, found.items), local: found.local };
+    alts = { for: id, status: 'done', items: goodAlternatives(p, found) };
   } catch {
-    alts = { for: id, status: 'error', items: [], local: false };
+    alts = { for: id, status: 'error', items: [] };
   }
   if (current === p) render();
 }
 
 /** Offered when a food scores poorly for the user or isn't a good fit. Loaded only on request. */
 function alternativesHtml(p: ProductData, verdict: Verdict, score: number | null): string {
-  if (kindOf(p) !== 'food' || !p.categories?.length || p.source === 'demo') return '';
+  if (kindOf(p) !== 'food' || !p.categories?.length || p.source === 'demo' || isInfantFormula(p)) return '';
   if (verdict.level === 'safe' && (score === null || score >= 60)) return '';
   const mine = alts && alts.for === (p.barcode ?? p.name) ? alts : null;
-  const head = '<h2>Healthier options</h2>';
+  const head = '<h2>Others on this shelf</h2>';
   if (!mine) {
     return `<section class="card alts">${head}
-      <p class="hint">Similar products that score better and pass every check in your profile.</p>
-      <button class="btn btn--secondary" data-action="alts-load">Find healthier options</button>
+      <p class="hint">Well-known products of the same kind that pass every check in your profile, with the numbers that differ.</p>
+      <button class="btn btn--secondary" data-action="alts-load">See others on this shelf</button>
     </section>`;
   }
   if (mine.status === 'loading') return `<section class="card alts">${head}<p class="hint" role="status">Looking for similar products…</p></section>`;
@@ -1111,16 +1158,16 @@ function alternativesHtml(p: ProductData, verdict: Verdict, score: number | null
       <button class="btn btn--secondary" data-action="alts-load">Try again</button>
     </section>`;
   }
-  if (!mine.items.length) return `<section class="card alts">${head}<p>No clearly better option was found in this category that also passes your profile.</p></section>`;
+  if (!mine.items.length) return `<section class="card alts">${head}<p>Nothing to show for this shelf.</p><p class="hint">Greenlit only lists a well-known product of the same kind when it can point to a number that differs. It would rather show nothing than something that makes no sense.</p></section>`;
   return `<section class="card alts">${head}
-    <p class="hint">Same kind of product, better score, and each one passes your profile${people().length ? ' and has no allergen for your family' : ''}.${mine.local ? '' : ' These may not be sold near you.'}</p>
+    <p class="hint">Same kind of product, sold in your country, each passing your profile${people().length ? ' and your family’s' : ''}. The line under each name is a fact from its label, not a recommendation.</p>
     <ul class="alts__list">${mine.items.map((a) => `
       <li><button class="alt" data-action="alt-open" data-barcode="${esc(a.product.barcode ?? '')}">
         <span class="thumb">${a.product.imageUrl ? `<img src="${esc(a.product.imageUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" />` : `<b>${esc(a.product.name.charAt(0).toUpperCase())}</b>`}</span>
-        <span class="alt__text"><strong>${esc(a.product.name)}</strong>${a.product.brand ? `<small>${esc(a.product.brand)}</small>` : ''}</span>
+        <span class="alt__text"><strong>${esc(a.product.name)}</strong>${a.product.brand ? `<small>${esc(a.product.brand)}</small>` : ''}<small class="alt__why">${esc(a.reasons.join(' · '))}</small></span>
         <span class="alt__score band--${bandFor(a.score).key}">${a.score}</span>
       </button></li>`).join('')}</ul>
-    <p class="hint">Scores are yours, worked out on this phone. Nobody pays to appear here. Check the pack before buying.</p>
+    <p class="hint">The number is your personal score, worked out on this phone from the same rules as every other product. Nobody pays to appear here. Check the pack.</p>
   </section>`;
 }
 
@@ -1151,7 +1198,7 @@ function supplementHtml(p: ProductData): string {
         <p class="hint">${s.serving ? `Serving: ${esc(s.serving)}. ` : ''}${perDay > 1 ? `The label directs up to ${perDay} servings a day, so amounts are multiplied by ${perDay}.` : 'Based on one serving a day.'}</p>
         ${doses.length
           ? `<ul class="doses">${doses.map(doseRow).join('')}</ul>
-             <p class="hint">Safe upper limit: the highest daily amount likely to pose no risk${pregnant ? ' in pregnancy' : ' for adults'}. Source: ${esc(LIMITS_SOURCE)}.</p>`
+             <p class="hint">Upper limit (the official “Tolerable Upper Intake Level”): the highest daily amount likely to pose no risk${pregnant ? ' in pregnancy' : ' for adults'}. Source: ${rich(LIMITS_SOURCE)}.</p>`
           : '<p>No vitamin or mineral with an official upper limit is listed.</p>'}
         ${others.length
           ? `<details class="ing__all"><summary>Everything else per serving (${others.length})</summary>
@@ -1168,7 +1215,7 @@ function supplementHtml(p: ProductData): string {
   const notesCard = notes.length
     ? `<section class="card">
         <h2>Worth knowing</h2>
-        <ul class="notable">${notes.map((n) => `<li class="flag flag--${n.tone === 'warn' ? 'restricted' : 'info'}"><strong>${esc(n.title)}</strong>${n.text ? `<p>${esc(n.text)}</p>` : ''}${n.source ? `<p class="source">Source: ${esc(n.source)}</p>` : ''}</li>`).join('')}</ul>
+        <ul class="notable">${notes.map((n) => `<li class="flag flag--${n.tone === 'warn' ? 'restricted' : 'info'}"><strong>${esc(n.title)}</strong>${n.text ? `<p>${rich(n.text)}</p>` : ''}${n.source ? `<p class="source">Source: ${rich(n.source)}</p>` : ''}</li>`).join('')}</ul>
       </section>`
     : '';
 
@@ -1190,14 +1237,14 @@ const stackId = (p: ProductData) => p.barcode ?? p.name;
 
 /** The saved daily supplements added together. `preview` shows what adding this product would do. */
 function stackTotalsHtml(preview: ProductData | null): string {
-  if (!stack.length) return '<p class="hint">Save what you take every day. Greenlit adds each vitamin and mineral up across all of them and warns when the total passes the safe limit. Several bottles together can pass a limit that no single one does.</p>';
+  if (!stack.length) return '<p class="hint">Save what you take every day. Greenlit adds each vitamin and mineral up across all of them and shows when the total passes an official upper limit. Several bottles together can pass a limit that no single one does.</p>';
   const pregnant = profile.rules.includes('pregnancy');
   const items = [...stack, ...(preview?.supplement ? [preview.supplement] : [])];
   const totals = dailyTotals(items, 'adult', pregnant).filter((d) => d.share > 0.5).slice(0, 6);
   return `
     <ul class="stack">${stack.map((i) => `<li><span>${esc(i.name)}${i.perDay > 1 ? ` · ${i.perDay} a day` : ''}</span><button class="link" data-action="stack-remove" data-id="${esc(i.id)}" aria-label="Remove ${esc(i.name)}">Remove</button></li>`).join('')}</ul>
     <p class="ing__meta">${preview ? 'Your total if you add this one' : 'Your daily total'}</p>
-    ${totals.length ? `<ul class="doses">${totals.map(doseRow).join('')}</ul>` : '<p class="hint">Nothing is above half of its safe limit.</p>'}`;
+    ${totals.length ? `<ul class="doses">${totals.map(doseRow).join('')}</ul>` : '<p class="hint">Nothing is above half of its upper limit.</p>'}`;
 }
 
 /** Cosmetics: no score, just the ingredients worth knowing about. */
@@ -1207,7 +1254,7 @@ function beautyHtml(p: ProductData): string {
   return `<section class="card">
     <h2>What’s in it</h2>
     ${flags.length
-      ? `<ul class="notable">${flags.map((f) => `<li class="flag flag--${f.severity}"><strong>${esc(f.name)}</strong><p>${esc(f.note)}</p>${f.source ? `<p class="source">Source: ${esc(f.source)}</p>` : ''}</li>`).join('')}</ul>
+      ? `<ul class="notable">${flags.map((f) => `<li class="flag flag--${f.severity}"><strong>${esc(f.name)}</strong><p>${rich(f.note)}</p>${f.source ? `<p class="source">Source: ${rich(f.source)}</p>` : ''}</li>`).join('')}</ul>
          <p class="hint">These notes report what regulators have decided. Cosmetics have no official health score, so Greenlit doesn’t invent one.</p>`
       : `<p>No ingredients that regulators have banned, restricted or flagged were found in this list.</p>
          <p class="hint">Cosmetics have no official health score, so Greenlit doesn’t invent one.</p>`}
@@ -1250,7 +1297,18 @@ function resultView(): string {
     kind === 'petfood' ? ''
     : `<p class="active-profile">${summary ? `Checked for: <strong>${esc(summary)}</strong>` : 'No profile set — this is a generic check. <button class="link" data-action="nav" data-view="profile">Set up your profile</button>'}</p>`;
 
-  const foodCards = kind !== 'food' ? '' : `
+  const formula = kind === 'food' && isInfantFormula(p);
+  const formulaCards = !formula ? '' : `
+    <section class="card formula">
+      <h2>Infant formula</h2>
+      <p>Greenlit does not score infant formula or suggest a different one.</p>
+      <p>Formula is a baby’s whole diet and its recipe is set by law: the long ingredient list is mostly the vitamins and minerals it is required to contain. Labels such as “processed” or “added sugar” that make sense for ordinary food do not apply to it.</p>
+      <p><strong>Don’t change, dilute or stop a formula because of an app.</strong> Talk to your paediatrician or health visitor first.</p>
+      <p class="hint">What Greenlit does check: the allergens in your profile, and whether this exact barcode is under a US recall.</p>
+    </section>
+    ${p.ingredientsText ? `<section class="card"><h2>Ingredients</h2>${ingredientsBody(p)}</section>` : ''}`;
+
+  const foodCards = kind !== 'food' || formula ? '' : `
     <section class="card">
       <h2>Your personal score</h2>
       ${scoreHtml}
@@ -1267,15 +1325,16 @@ function resultView(): string {
       <span class="verdict__art" aria-hidden="true"><i></i><i></i></span>
       ${heroImage(p)}
       <div class="verdict__icon">${icon(VERDICT_ICON[verdict.level])}</div>
-      <h1 class="verdict__title">${verdictTitle(verdict.level, kind, allergy)}</h1>
-      <ul class="verdict__reasons">${verdict.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
-      ${verdict.warnings.map((w) => `<p class="verdict__warning">${icon('warning')}<span>${esc(w)}</span></p>`).join('')}
+      <h1 class="verdict__title">${formula && verdict.level === 'safe' && !allergy ? 'Nothing flagged' : verdictTitle(verdict.level, kind, allergy)}</h1>
+      <ul class="verdict__reasons">${verdict.reasons.map((r) => `<li>${rich(r)}</li>`).join('')}</ul>
+      ${verdict.warnings.map((w) => `<p class="verdict__warning">${icon('warning')}<span>${rich(w)}</span></p>`).join('')}
       ${p.badIngredients ? '<p class="verdict__note">The database entry for this product has advertising text where the ingredients should be, so Greenlit ignored it.</p>' : ''}
       ${(!p.ingredientsText || (allergy && verdict.level !== 'not-safe')) && p.source !== 'photo' && p.source !== 'demo' ? `<button class="btn verdict__action" data-action="photo" ${p.barcode ? `data-for="${esc(p.barcode)}"` : ''}>${icon('camera')}${p.ingredientsText ? 'Check against my pack' : 'Photograph the label'}</button>` : ''}
     </section>
     ${recallHtml(p)}
     ${checkedFor}
     ${familyHtml(p)}
+    ${formulaCards}
     ${foodCards}
     ${kind === 'beauty' ? beautyHtml(p) : ''}
     ${kind === 'supplement' ? supplementHtml(p) : ''}
@@ -1291,7 +1350,7 @@ function resultView(): string {
       </div>
     </section>
 
-    ${kind !== 'food' ? '' : `<section class="card">
+    ${kind !== 'food' || formula ? '' : `<section class="card">
       <h2>Per 100g</h2>
       <div class="nums">
         ${numberCell('Sugar', n.sugars)}${numberCell('Salt', n.salt)}${numberCell('Fat', n.fat)}${numberCell('Protein', n.protein)}
@@ -1304,6 +1363,7 @@ function resultView(): string {
       ${p.source === 'photo' ? '<p>This result was read from your photo by Google Gemini and may contain reading mistakes.</p>' : ''}
       ${p.source === 'demo' ? '<p>This is made-up demo data, not a real product.</p>' : ''}
       ${fixLink(p)}
+      <p>These words describe how the listed ingredients fit your profile. They are not a judgement of the product or its maker. <a href="./how.html">How Greenlit decides</a>.</p>
       <p>${KIND_DISCLAIMER[kind]}</p>
     </footer>
 
@@ -1346,7 +1406,7 @@ function profileView(): string {
       ${member.kind === 'person'
         ? `<fieldset><legend>Age</legend>
             <div class="opts opts--grid">${AGE_OPTS.map(([v, l]) => check('age', v, l, undefined, (member.age ?? 'adult') === v, 'radio')).join('')}</div>
-            <p class="hint">Children are checked differently: caffeine, added sugar, honey and salt for the youngest, and lower safe limits for supplements.</p>
+            <p class="hint">Children are checked differently: caffeine, added sugar, honey and salt for the youngest, and lower upper limits for supplements.</p>
           </fieldset>`
         : ''}`
     : '';
@@ -1459,7 +1519,7 @@ function settingsView(): string {
       <p>Cosmetics: ${link('https://world.openbeautyfacts.org', 'Open Beauty Facts')} (ODbL). Pet food: ${link('https://world.openpetfoodfacts.org', 'Open Pet Food Facts')} (ODbL). Extra US foods: ${link('https://fdc.nal.usda.gov', 'USDA FoodData Central')}.</p>
       <p>${DISCLAIMER}</p>
       <p class="hint">No account, no tracking. Your profile, history and key never leave this browser.</p>
-      <p><a href="./privacy.html">Privacy &amp; terms</a> · <a href="./support.html">Help &amp; support</a></p>
+      <p><a href="./how.html">How Greenlit decides</a> · <a href="./privacy.html">Privacy &amp; terms</a> · <a href="./support.html">Help &amp; support</a></p>
     </section>
     <section class="card">
       <h2>Your data</h2>

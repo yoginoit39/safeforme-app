@@ -1,5 +1,5 @@
 import type { Nutriments, ProductData, ProductKind } from '../types';
-import { knownFromParse, parseIngredients } from '../ingredients';
+import { knownFromParse, parseIngredients, recognised } from '../ingredients';
 import { buildTranslation, idToEnglish, looksLikeIngredients, recognisedIds } from '../lang';
 import { lookupDsld } from './dsld';
 import { lookupUsda } from './usda';
@@ -19,7 +19,7 @@ const SOURCES = { food: 'openfoodfacts', beauty: 'openbeautyfacts', petfood: 'op
 
 const BASE_FIELDS = [
   'product_name', 'brands', 'quantity', 'image_small_url', 'image_front_url', 'ingredients_text', 'ingredients_text_en', 'lc', 'ingredients',
-  'allergens_tags', 'traces_tags', 'labels_tags', 'nutriscore_grade', 'nova_group', 'nutriments', 'categories_tags', 'countries_tags', 'last_image_t', 'last_modified_t', 'ingredients_n', 'unknown_ingredients_n',
+  'allergens_tags', 'traces_tags', 'labels_tags', 'nutriscore_grade', 'nova_group', 'nutriments', 'categories_tags', 'countries_tags', 'last_image_t', 'last_modified_t', 'ingredients_n', 'unknown_ingredients_n', 'unique_scans_n',
 ];
 const fieldsFor = (lang: string) => [...BASE_FIELDS, `product_name_${lang}`, `ingredients_text_${lang}`].join(',');
 
@@ -68,14 +68,23 @@ export function mapOffProduct(barcode: string, p: Record<string, any>, kind: Pro
   const all = [original, str(p.ingredients_text_en), localized].filter((t): t is string => !!t);
   // Marketing copy pasted into the ingredients box is not an ingredient list: treat it as missing.
   const texts = all.filter(looksLikeIngredients);
-  const ingredientsText = [...new Set(texts)].join(' ; ') || undefined;
+  // The database's own parse, as plain English names. The checks read this too, so "kofeina" in a
+  // Polish list or "cafeína" in a Spanish one is still seen as caffeine.
+  const canonical = texts.length ? buildTranslation(p.ingredients, idToEnglish) : undefined;
+  // For the checks, additives stay as bare codes ("e150d"): its full name, "sulphite ammonia caramel",
+  // would wrongly read as the allergen sulphites.
+  const forChecks = texts.length ? buildTranslation(p.ingredients, (id) => id.replace(/^en:/, '').replace(/-/g, ' ')) : undefined;
+  const ingredientsText = [...new Set([...texts, ...(forChecks ? [forChecks] : [])])].join(' ; ') || undefined;
   const good = (t: string | undefined) => (t && texts.includes(t) ? t : undefined);
   const productLang = str(p.lc)?.slice(0, 2).toLowerCase();
   const ingredientsShown = good(localized) ?? good(original) ?? texts[0];
   const ingredientsLang = !ingredientsShown ? undefined : ingredientsShown === localized ? userLang : ingredientsShown === original ? productLang : 'en';
   // English names come straight from the database's own ingredient ids; other languages need one more request.
-  const ingredientsTranslated =
-    ingredientsShown && ingredientsLang !== userLang && userLang === 'en' ? buildTranslation(p.ingredients, idToEnglish) : undefined;
+  // Shown in English only: a fragment the database could not name is counted, not printed in Polish.
+  const foreign = !!ingredientsShown && ingredientsLang !== userLang && userLang === 'en';
+  const ingredientsTranslated = foreign && canonical ? buildTranslation(p.ingredients, idToEnglish, false) : undefined;
+  const parsedList = Array.isArray(p.ingredients) ? (p.ingredients as Record<string, unknown>[]) : [];
+  const ingredientsUntranslated = ingredientsTranslated ? parsedList.filter((i) => !recognised(i)).length : undefined;
 
   // The database's own parse tells real ingredient names from packaging small print typed after them.
   const list = ingredientsShown ? parseIngredients(ingredientsShown, knownFromParse(p.ingredients)) : null;
@@ -93,6 +102,7 @@ export function mapOffProduct(barcode: string, p: Record<string, any>, kind: Pro
     ingredientsShown,
     ingredientsLang,
     ingredientsTranslated,
+    ingredientsUntranslated: ingredientsUntranslated || undefined,
     ingredientItems: list?.items.length ? list.items : undefined,
     ingredientNotes: list?.notes.length ? list.notes : undefined,
     ingredientAdditives: list?.additives.length ? list.additives : undefined,
@@ -106,9 +116,10 @@ export function mapOffProduct(barcode: string, p: Record<string, any>, kind: Pro
     nutriments: hasNutriments ? nutriments : undefined,
     categories: stripPrefix(p.categories_tags),
     countries: stripPrefix(p.countries_tags).slice(0, 6),
+    popularity: num(p.unique_scans_n),
     // The last label photo is the best sign of how fresh the entry is; edits can be automatic.
     dataDate: (num(p.last_image_t) ?? num(p.last_modified_t)) ? (num(p.last_image_t) ?? num(p.last_modified_t))! * 1000 : undefined,
-    ingredientLangs: [good(original) ? productLang : undefined, good(str(p.ingredients_text_en)) ? 'en' : undefined, good(localized) ? userLang : undefined].filter((l): l is string => !!l).filter((l, i, a) => a.indexOf(l) === i),
+    ingredientLangs: [good(original) ? productLang : undefined, good(str(p.ingredients_text_en)) ? 'en' : undefined, good(localized) ? userLang : undefined, canonical ? 'en' : undefined].filter((l): l is string => !!l).filter((l, i, a) => a.indexOf(l) === i),
     unknownShare: num(p.ingredients_n) && num(p.ingredients_n)! >= 5 && num(p.unknown_ingredients_n) !== undefined ? num(p.unknown_ingredients_n)! / num(p.ingredients_n)! : undefined,
     kind: kind === 'food' && isSupplement(stripPrefix(p.categories_tags), str(p.product_name) ?? '') ? 'supplement' : kind,
     source: SOURCES[kind],

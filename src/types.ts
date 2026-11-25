@@ -76,6 +76,8 @@ export type ProductData = {
   ingredientLangs?: string[];
   /** Share of the listed ingredients the database could not recognise (0–1): high means a garbled list. */
   unknownShare?: number;
+  /** How many people have scanned this entry: obscure entries are more often wrong. */
+  popularity?: number;
   /** Where the scanned product is sold, for suggesting alternatives that can be found locally. */
   countries?: string[];
   /** What to show the user: the list in their language when the database has one, else the original. */
@@ -90,6 +92,8 @@ export type ProductData = {
   ingredientNotes?: string[];
   /** Pet food: added vitamins and preservatives, listed separately on the pack. */
   ingredientAdditives?: string[];
+  /** Ingredients in a foreign-language list that had no English name and so are not shown. */
+  ingredientsUntranslated?: number;
   /** The language this result was fetched for, so a language change refetches it. */
   userLang?: string;
   /** The database's ingredients box held something that is not an ingredient list. */

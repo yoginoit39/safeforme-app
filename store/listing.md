@@ -3,20 +3,20 @@
 Paste these into Play Console. Name is still the working name.
 
 ## App name (max 30)
-Greenlit: Food & Beauty Scanner
+Greenlit: Label Scanner
 
 ## Short description (max 80)
-Scan food, cosmetics & pet food. See if it's safe for you, family and pets.
+Scan food, cosmetics & supplements. See what's in them, checked for you.
 
 ## Full description (max 4000)
-Is this safe for YOU?
+What's in it, for YOU?
 
 Most scanners give everyone the same score. Greenlit gives you an answer made for you.
 
 Tell it once what to watch for — allergies, halal, kosher, vegan, vegetarian, pregnancy, diabetes, low salt, or a goal like losing weight. Then scan any barcode, or search by name, and get two answers in a second:
 
-• A clear verdict: Safe for you, Not safe, or Check the label — with the exact reason, in plain words.
-• For food, a personal health score from 0 to 100, with every point explained.
+• A clear answer in plain words: Fits your profile, Not ideal, Not for you, or Check the label — with the exact reason and its source.
+• For food, a personal score from 0 to 100 showing how it fits your needs, with every point explained.
 
 FOR THE WHOLE FAMILY
 • Add family members, each with their own allergies and diet. One scan shows an answer for every person.
@@ -37,9 +37,9 @@ MADE FOR MORE NEEDS
 Allergies (peanuts, tree nuts, milk, egg, soy, wheat/gluten, fish, shellfish, sesame, celery, mustard, lupin, sulphites), coeliac, lactose intolerance, halal, kosher, vegan, vegetarian, pregnancy, diabetes, low salt, cholesterol, low carb — plus an avoid list for palm oil, added sugar, sweeteners, additives and caffeine.
 
 WHY IT'S DIFFERENT
-• Personal, not generic. The same product can be fine for one person and unsafe for another.
-• Honest. If a product's ingredients are missing, the app says "Check the label" — never a false "Safe".
-• Halal and kosher handled carefully: only certified products show Safe.
+• Personal, not generic. The same product can be fine for one person and wrong for another.
+• Honest. If a product's ingredients are missing, the app says "Check the label" — never a guess.
+• Halal and kosher handled carefully: only certified products show as fitting your profile.
 • Catches "may contain traces" warnings for allergies.
 
 FREE AI EXTRAS (OPTIONAL)

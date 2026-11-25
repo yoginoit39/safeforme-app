@@ -10,11 +10,11 @@ const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n
 export type Band = { key: 'excellent' | 'good' | 'okay' | 'poor' | 'bad'; label: string };
 
 export function bandFor(value: number): Band {
-  if (value >= 80) return { key: 'excellent', label: 'Excellent for you' };
-  if (value >= 60) return { key: 'good', label: 'Good for you' };
-  if (value >= 40) return { key: 'okay', label: 'Okay sometimes' };
-  if (value >= 20) return { key: 'poor', label: 'Poor for you' };
-  return { key: 'bad', label: 'Bad for you' };
+  if (value >= 80) return { key: 'excellent', label: 'Fits every day' };
+  if (value >= 60) return { key: 'good', label: 'Fits most days' };
+  if (value >= 40) return { key: 'okay', label: 'Fits sometimes' };
+  if (value >= 20) return { key: 'poor', label: 'Fits occasionally' };
+  return { key: 'bad', label: 'Fits rarely' };
 }
 
 const signed = (n: number) => (n > 0 ? `+${n}` : `−${Math.abs(n)}`);

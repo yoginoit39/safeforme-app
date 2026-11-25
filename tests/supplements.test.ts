@@ -52,7 +52,7 @@ describe('dose check', () => {
   it('flags a vitamin above its safe upper limit as "not ideal", with the numbers', () => {
     const v = computeSupplementVerdict(megaD, profile());
     expect(v.level).toBe('caution');
-    expect(v.reasons[0]).toBe('Vitamin D: 250 mcg a day — the safe upper limit is 100 mcg for adults.');
+    expect(v.reasons[0]).toBe('Vitamin D: 250 mcg a day — the official upper limit is 100 mcg for adults.');
   });
 
   it('multiplies by the servings a day the label directs', () => {
@@ -67,7 +67,7 @@ describe('dose check', () => {
     expect(computeSupplementVerdict(multi, profile(), 'adult').level).toBe('safe');
     const child = computeSupplementVerdict(multi, profile(), '4-8');
     expect(child.level).toBe('caution');
-    expect(child.reasons[0]).toMatch(/Zinc: 15 mg a day — the safe upper limit is 12 mg for ages 4–8/);
+    expect(child.reasons[0]).toMatch(/Zinc: 15 mg a day — the official upper limit is 12 mg for ages 4–8/);
   });
 
   it('never checks for a child under 4', () => {

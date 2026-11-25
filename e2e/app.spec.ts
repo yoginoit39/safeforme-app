@@ -33,7 +33,7 @@ test('barcode → verdict → score, for each kind of answer', async ({ page }, 
   await open(page, info);
 
   await lookup(page, '3017620422003');
-  await expect(page.locator('.verdict__title')).toHaveText('Not safe');
+  await expect(page.locator('.verdict__title')).toHaveText('Not for you');
   await expect(page.locator('.verdict__reasons')).toContainText('tree nuts');
   await expect(page.locator('#score-num')).toHaveText('0');
   await expect(page.locator('.reasons')).toContainText('High sugar for your sugar watch');
@@ -67,7 +67,7 @@ test('worst case: every profile option on, longest product', async ({ page }, in
   await audit(page, info, '07-home-full-profile');
 
   await lookup(page, '1111111111111');
-  await expect(page.locator('.verdict__title')).toHaveText('Not safe');
+  await expect(page.locator('.verdict__title')).toHaveText('Not for you');
   expect(await page.locator('.verdict__reasons li').count()).toBeGreaterThan(8);
   await audit(page, info, '08-result-worst-case');
 
@@ -208,7 +208,7 @@ test('label photo with a key → verdict; key only goes to Google', async ({ pag
   let chooser = page.waitForEvent('filechooser');
   await page.locator('.view--scan [data-action="photo"]').click();
   await (await chooser).setFiles(label);
-  await expect(page.locator('.verdict__title')).toHaveText('Not safe', { timeout: 20_000 });
+  await expect(page.locator('.verdict__title')).toHaveText('Not for you', { timeout: 20_000 });
 
   // AI explanation: one tap, clearly labelled, and the user's profile is NOT sent to Google.
   await page.locator('[data-action="ai-explain"]').click();
@@ -232,7 +232,7 @@ test('label photo with a key → verdict; key only goes to Google', async ({ pag
   chooser = page.waitForEvent('filechooser');
   await page.locator('.view--scan [data-action="photo-library"]').click();
   await (await chooser).setFiles(label);
-  await expect(page.locator('.verdict__title')).toHaveText('Not safe', { timeout: 20_000 });
+  await expect(page.locator('.verdict__title')).toHaveText('Not for you', { timeout: 20_000 });
   await expect(page.locator('.verdict__reasons')).toContainText('pork');
   await expect(page.locator('.tag--photo')).toHaveText('From your label photo');
   await audit(page, info, '17-result-from-photo');
@@ -267,24 +267,28 @@ test('family, pets, cosmetics, pet food and search by name', async ({ page }, in
 
   // One food scan, checked for everyone. Nutella has milk (Aisha) and cocoa (Rex), but no peanuts.
   await lookup(page, '3017620422003');
-  await expect(page.locator('.fam__row', { hasText: 'Aisha' })).toContainText('Not safe');
-  await expect(page.locator('.fam__row', { hasText: 'Rex (dog)' })).toContainText('Not safe');
+  await expect(page.locator('.fam__row', { hasText: 'Aisha' })).toContainText('Not suitable');
+  await expect(page.locator('.fam__row', { hasText: 'Rex (dog)' })).toContainText('Not suitable');
   await expect(page.locator('.fam__row', { hasText: 'Rex (dog)' })).toContainText('chocolate');
   await audit(page, info, '22-result-family');
 
   // Cosmetics: found in the beauty database, no score, flagged ingredients with sources.
   await lookup(page, '3600000000017');
-  await expect(page.locator('.verdict__title')).toHaveText('Not safe');
+  await expect(page.locator('.verdict__title')).toHaveText('Not for you');
   await expect(page.locator('.verdict__reasons')).toContainText('fragrance allergy');
   await expect(page.locator('#score-num')).toHaveCount(0);
   await expect(page.locator('.notable')).toContainText('Lilial');
   await expect(page.locator('.notable')).toContainText('EU Regulation 2021/1902');
+  // The source is a link to the rule itself, not just a name.
+  await expect(page.locator('.notable a[href="https://eur-lex.europa.eu/eli/reg/2021/1902/oj"]').first()).toBeVisible();
+  await expect(page.locator('.legal a[href="./how.html"]')).toBeVisible();
+  await expect(page.locator('.legal')).toContainText('not a judgement of the product or its maker');
   await expect(page.locator('.legal')).toContainText('Open Beauty Facts');
   await audit(page, info, '23-result-cosmetics');
 
   // Pet food: judged for the pet, not the person.
   await lookup(page, '7600000000012');
-  await expect(page.locator('.verdict__title')).toHaveText('Safe for your pet');
+  await expect(page.locator('.verdict__title')).toHaveText('No toxins found');
   await expect(page.locator('.legal')).toContainText('Not veterinary advice');
   await expect(page.locator('.legal')).toContainText('Open Pet Food Facts');
   await audit(page, info, '24-result-petfood');
@@ -376,7 +380,7 @@ test('scanner: survives the screen being redrawn mid-scan, and cancel then scan 
   await page.addInitScript(fakeCamera);
   await open(page, info);
 
-  // A slow answer that lands mid-scan: ask for healthier options, then tap "Scan next" before it arrives.
+  // A slow answer that lands mid-scan: ask for others on the shelf, then tap "Scan next" before it arrives.
   await page.route('https://world.openfoodfacts.org/api/v2/search**', async (route) => {
     await new Promise((r) => setTimeout(r, 2500));
     await route.fulfill({ json: { products: [] } });

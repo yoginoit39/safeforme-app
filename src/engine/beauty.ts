@@ -17,7 +17,7 @@ const DANGER: Rule[] = [
   {
     name: 'Mercury',
     terms: ['mercury', 'mercurous chloride', 'calomel', 'mercuric', 'mercurio', 'ammoniated mercury', 'hydrargyrum'],
-    note: 'Found in some skin-lightening creams. Damages the kidneys and nervous system. Banned in cosmetics worldwide.',
+    note: 'Found in some skin-lightening creams. The WHO says mercury in skin products can damage the kidneys and nervous system. The Minamata Convention, a UN treaty, bans making or trading cosmetics with more than 1 part per million.',
     source: 'WHO; Minamata Convention on Mercury',
   },
   {

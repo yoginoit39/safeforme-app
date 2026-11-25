@@ -26,7 +26,7 @@ describe('why: summary of what is in a product', () => {
     expect(t).toMatch(/Very high in sugar — 56.3g per 100g/);
     expect(t).toMatch(/Contains palm oil/);
     expect(t).toMatch(/High in saturated fat/);
-    expect(t).toMatch(/Ultra-processed/);
+    expect(t).toMatch(/NOVA group 4: ultra-processed/);
     expect(w.insights.find((i) => i.title.startsWith('Added sugar'))!.detail).toMatch(/first ingredient/);
     expect(w.insights[0].tone).toBe('bad'); // worst news first
   });
@@ -66,7 +66,8 @@ describe('why: summary of what is in a product', () => {
 describe('why: processing level', () => {
   it('uses the official NOVA group when present and cites sources for group 4', () => {
     const w = why(spread);
-    expect(w.processing).toMatchObject({ group: 4, estimated: false, title: 'Ultra-processed food' });
+    expect(w.processing).toMatchObject({ group: 4, estimated: false, title: 'Ultra-processed' });
+    expect(w.processing!.source).toMatch(/NOVA classification \(University of São Paulo\)/); // whose classification it is
     expect(w.processing!.text).toMatch(/overall diet, not a single product/);
     expect(w.processing!.source).toMatch(/WHO/);
   });

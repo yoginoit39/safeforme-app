@@ -241,7 +241,9 @@ export function parseIngredients(text: string, known: ReadonlySet<string> = new 
 
   for (const { text: raw, end } of split(body)) {
     // "Contains 2% or less of: salt" — the heading is not an ingredient, what follows is.
-    let seg = raw.replace(/^\s*(contains?\s+)?(less than\s+)?\d+([.,]\d+)?\s?%\s+or less\s*(of)?\s*(each of)?\s*(the following)?\s*:?\s*/i, '');
+    let seg = raw
+      .replace(/^\s*(contains?\s+)?(less than\s+)?\d+([.,]\d+)?\s?%\s+or less\s*(of)?\s*(each of)?\s*(the following)?\s*:?\s*/i, '')
+      .replace(/^\s*(and\s+)?(contains?\s+)?less than\s+\d+([.,]\d+)?\s?%\s*(of)?\s*(each of)?\s*(the following)?\s*:?\s*/i, '');
     const sentenceEnds = end === '.' || end === '\n' || end === ';' || end === '•';
 
     // "May contain nuts, milk and soya." is one statement, not three ingredients.
@@ -357,3 +359,67 @@ export function knownFromParse(ingredients: unknown): Set<string> {
   walk(ingredients);
   return out;
 }
+
+export type Nutrient = { group: 'vitamin' | 'mineral' | 'other'; plain: string };
+
+/**
+ * Labels list vitamins and minerals by their chemical names, which read as alarming to anyone
+ * who is not a chemist: "pyridoxine hydrochloride" is vitamin B6. This gives each its everyday name.
+ * Only well-established identities are listed; anything else is left exactly as printed.
+ */
+const VITAMINS: [RegExp, string][] = [
+  [/\bbeta[- ]?carotene\b/i, 'Beta-carotene (the body makes vitamin A from it)'],
+  [/\bvitamin a\b|\bretin(ol|yl)\b/i, 'Vitamin A'],
+  [/\bvitamin b-?1\b|\bthiamine?\b/i, 'Vitamin B1'],
+  [/\bvitamin b-?2\b|\briboflavin\b/i, 'Vitamin B2'],
+  [/\bvitamin b-?3\b|\bniacin(amide)?\b|\bnicotinamide\b/i, 'Vitamin B3'],
+  [/\bvitamin b-?5\b|pantothen/i, 'Vitamin B5'],
+  [/\bvitamin b-?6\b|\bpyridox/i, 'Vitamin B6'],
+  [/\bvitamin b-?7\b|\bbiotin\b/i, 'Biotin (vitamin B7)'],
+  [/\bvitamin b-?9\b|\bfol(ic acid|ate)\b/i, 'Folate (vitamin B9)'],
+  [/\bvitamin b-?12\b|cobalamin/i, 'Vitamin B12'],
+  [/\bvitamin c\b|\bascorb/i, 'Vitamin C'],
+  [/\bvitamin d\d?\b|calciferol/i, 'Vitamin D'],
+  [/\bvitamin e\b|tocopher/i, 'Vitamin E'],
+  [/\bvitamin k\d?\b|\bphylloquinone\b|\bphytonadione\b|\bmenaquinone\b/i, 'Vitamin K'],
+];
+const SALT_OF = '(phosphate|citrate|sulfate|sulphate|carbonate|oxide|hydroxide|gluconate|lactate|fumarate|pyrophosphate|chloride|bisglycinate|glycerophosphate)';
+const MINERALS: [RegExp, string][] = [
+  // Named for the part that matters: potassium iodide is there for the iodine.
+  [/\biodide\b|\biodate\b|\biodine\b/i, 'Iodine'],
+  [/\bselen(ite|ate|ium)\b/i, 'Selenium'],
+  [/\bmolybd(ate|enum)\b/i, 'Molybdenum'],
+  [/\bchromium\b/i, 'Chromium'],
+  [new RegExp(String.raw`\b(ferrous|ferric|iron) ${SALT_OF}\b|\breduced iron\b`, 'i'), 'Iron'],
+  [new RegExp(String.raw`\b(cupric|copper) ${SALT_OF}\b`, 'i'), 'Copper'],
+  [new RegExp(String.raw`\bzinc ${SALT_OF}\b`, 'i'), 'Zinc'],
+  [new RegExp(String.raw`\bmanganese ${SALT_OF}\b`, 'i'), 'Manganese'],
+  [new RegExp(String.raw`\bmagnesium ${SALT_OF}\b`, 'i'), 'Magnesium'],
+  [new RegExp(String.raw`\bcalcium ${SALT_OF}\b`, 'i'), 'Calcium'],
+  [new RegExp(String.raw`\bpotassium ${SALT_OF}\b`, 'i'), 'Potassium'],
+  [/\bsodium (phosphate|citrate|sulfate|carbonate|gluconate|lactate|pyrophosphate)\b/i, 'Sodium'],
+];
+const OTHERS: [RegExp, string][] = [
+  [/\bschizochytrium\b|\bcryp?thecodinium\b|\bcrypthecodinium\b|\bdha\b|\bdocosahexaenoic\b/i, 'DHA, an omega-3 fat (from algae)'],
+  [/\bmortierella\b|\balpina oil\b|\bm\.\s?alpina\b|\barachidonic\b/i, 'ARA, an omega-6 fat'],
+  [/\bcholine\b/i, 'Choline'],
+  [/\binositol\b/i, 'Inositol'],
+  [/\btaurine\b/i, 'Taurine'],
+  [/\b(l-)?carnitine\b/i, 'Carnitine'],
+  [/\bnucleotides?\b|\b5'-monophosphate\b/i, 'Nucleotides'],
+  [/\bl-(methionine|cystine|cysteine|tryptophan|tyrosine|histidine|leucine|isoleucine|valine|lysine|arginine)\b/i, 'Amino acid'],
+  [/\blutein\b/i, 'Lutein'],
+  [/\blycopene\b/i, 'Lycopene'],
+];
+
+export function plainNutrient(name: string): Nutrient | null {
+  const head = name.replace(/\([^)]*\)/g, ' ');
+  // Check the calcium salt of a vitamin as the vitamin: "calcium pantothenate" is vitamin B5, not calcium.
+  for (const [re, plain] of VITAMINS) if (re.test(head)) return { group: 'vitamin', plain };
+  for (const [re, plain] of OTHERS) if (re.test(head)) return { group: 'other', plain };
+  if (/\bsodium chloride\b/i.test(head)) return null; // that is table salt
+  for (const [re, plain] of MINERALS) if (re.test(head)) return { group: 'mineral', plain };
+  return null;
+}
+
+export const isMicronutrient = (name: string): boolean => plainNutrient(name) !== null;

@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light" />
+    <title>How Greenlit decides</title>
+    <style>
+      body { margin: 0; background: #fff7e8; color: #1d1a14; font: 16px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif; }
+      main { max-width: 640px; margin: 0 auto; padding: 32px 22px 64px; }
+      h1 { font-size: 2rem; line-height: 1.1; letter-spacing: -0.03em; margin: 0 0 4px; }
+      h2 { font-size: 1.2rem; margin: 32px 0 6px; }
+      p, li { color: #3b362c; }
+      ul { padding-left: 20px; }
+      .muted { color: #6e675a; font-size: 0.9rem; }
+      a { color: #0f8a43; font-weight: 600; }
+      .box { background: #fff; border-radius: 20px; padding: 16px 20px; margin: 16px 0; }
+      table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 0.92rem; }
+      th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid #f0e6d2; vertical-align: top; color: #3b362c; }
+      th { color: #6e675a; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p><a href="./">← Back to Greenlit</a></p>
+      <h1>How Greenlit decides</h1>
+      <p class="muted">Every rule the app applies, the numbers behind it, and where each one comes from. Last updated: 24 November 2026</p>
+
+      <div class="box">
+        <strong>The short version.</strong> Greenlit reads what is printed on a product’s label and compares it with the needs you entered and with what public health bodies and regulators have published.
+        It describes ingredients and numbers. It does not test products, it does not judge companies, and it is not paid by anyone.
+        Every result is worked out on your phone by fixed rules: the same product and the same profile always give the same answer. No AI decides a result.
+      </div>
+
+      <h2>What the words mean</h2>
+      <table>
+        <tr><th>You see</th><th>It means</th></tr>
+        <tr><td>Nothing flagged / Fits your profile</td><td>Nothing in the listed ingredients conflicts with what you entered.</td></tr>
+        <tr><td>No allergens found</td><td>You entered an allergy. None of your allergens is in the ingredient list or the allergen tags. The app does not say “safe”: the data may be out of date, so read the pack.</td></tr>
+        <tr><td>Not ideal for you</td><td>Nothing you must avoid, but it works against a health need or an avoid choice you entered. The reason is shown with the number.</td></tr>
+        <tr><td>Not for you / Not suitable</td><td>The label lists something your profile rules out: an allergen, an ingredient your diet excludes, or something not for that person’s age.</td></tr>
+        <tr><td>Not for this age</td><td>Published guidance says not to give it at that age.</td></tr>
+        <tr><td>Check the label</td><td>The data is missing, garbled, too old, or in a language the app cannot check. The app will not guess.</td></tr>
+      </table>
+      <p>These words describe how a product fits <em>your</em> profile. They are not a statement about the product’s quality or its maker.</p>
+
+      <h2>Allergies</h2>
+      <ul>
+        <li>An allergen named in the ingredient list, or in the database’s allergen tags, gives “Not for you”. A “may contain” line counts.</li>
+        <li>A clean result is given only when the list is in English, French, German, Spanish or Italian, at least 40% of it is recognised by the database, and the entry was refreshed within five years. Otherwise: “Check the label”.</li>
+        <li>Every clean result shows when the entry was last refreshed, and a button to check your own pack from a photo.</li>
+      </ul>
+
+      <h2>Your personal score (food only)</h2>
+      <p>A number from 0 to 100 describing how a food fits your needs. It starts from the public Nutri-Score grade and is then adjusted for you.</p>
+      <table>
+        <tr><th>Start</th><th>Points</th></tr>
+        <tr><td>Nutri-Score A / B / C / D / E</td><td>90 / 75 / 55 / 35 / 15</td></tr>
+        <tr><td>No Nutri-Score</td><td>60, then −10 for sugar over 10g per 100g (−20 over 22.5g), −10 for salt over 1.5g, −10 for saturated fat over 5g, +10 for fibre of 3g or more, +10 for protein of 8g or more. Marked as an estimate.</td></tr>
+      </table>
+      <table>
+        <tr><th>Your profile</th><th>Adjustment (per 100g)</th></tr>
+        <tr><td>Diabetes or low sugar</td><td>Sugar over 5g: −10. Over 15g: −25.</td></tr>
+        <tr><td>Low salt</td><td>Salt over 0.6g: −10. Over 1.5g: −20.</td></tr>
+        <tr><td>Cholesterol</td><td>Saturated fat over 5g: −10. Over 10g: −20.</td></tr>
+        <tr><td>Low carb</td><td>Carbohydrate over 20g: −10. Over 50g: −20.</td></tr>
+        <tr><td>Each item on your avoid list</td><td>−10</td></tr>
+        <tr><td>Goal: lose weight</td><td>Over 400 kcal: −10. Fat over 20g: −10.</td></tr>
+        <tr><td>Goal: build muscle</td><td>Protein of 10g or more: +10. 20g or more: +15.</td></tr>
+        <tr><td>Goal: eat cleaner</td><td>NOVA group 4: −10. NOVA group 1: +5.</td></tr>
+      </table>
+      <p>Bands: 80–100 “Fits every day”, 60–79 “Fits most days”, 40–59 “Fits sometimes”, 20–39 “Fits occasionally”, 0–19 “Fits rarely”. Every point added or removed is listed under the score. The thresholds are Greenlit’s own choices; the Nutri-Score grade is a public standard.</p>
+      <p>Cosmetics, supplements, pet food and infant formula are <strong>not scored</strong>: no official score exists for them, so the app does not invent one.</p>
+
+      <h2>Children</h2>
+      <p>Applied to a family member by the age you set. Each rule restates published guidance.</p>
+      <table>
+        <tr><th>Rule</th><th>Ages</th><th>Source</th></tr>
+        <tr><td>Caffeine: none</td><td>Under 4 (firm under 2)</td><td><a href="https://www.cdc.gov/infant-toddler-nutrition/foods-and-drinks/foods-and-drinks-to-avoid-or-limit.html" rel="noopener noreferrer">US CDC</a></td></tr>
+        <tr><td>Caffeine: at most 2.5 mg per kg of body weight a day</td><td>4–18</td><td><a href="https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-additives/caffeine-foods.html" rel="noopener noreferrer">Health Canada</a></td></tr>
+        <tr><td>Energy drinks: advised against</td><td>Under 18</td><td><a href="https://www.fda.gov/consumers/consumer-updates/spilling-beans-how-much-caffeine-too-much" rel="noopener noreferrer">US FDA</a>, citing the American Academy of Pediatrics</td></tr>
+        <tr><td>Added sugar and sugary drinks: none</td><td>Under 2</td><td>US CDC</td></tr>
+        <tr><td>Sweetened food and drink: avoid</td><td>4 and under</td><td><a href="https://www.nhs.uk/conditions/baby/weaning-and-feeding/foods-to-avoid-giving-babies-and-young-children/" rel="noopener noreferrer">UK NHS</a></td></tr>
+        <tr><td>Honey: never</td><td>Under 12 months</td><td>US CDC, UK NHS</td></tr>
+        <tr><td>Juice: none; then limited</td><td>Under 12 months; ages 1–3</td><td>US CDC</td></tr>
+        <tr><td>Cow’s milk as a drink: not yet</td><td>Under 12 months</td><td>US CDC</td></tr>
+        <tr><td>Unpasteurised milk, juice, cheese: do not give</td><td>Under 4</td><td>US CDC</td></tr>
+        <tr><td>Salty foods (over 1.5g salt per 100g): avoid</td><td>Under 4</td><td>US CDC, UK NHS</td></tr>
+        <tr><td>Whole nuts: choking risk</td><td>Under 5</td><td>UK NHS</td></tr>
+        <tr><td>Rice drinks in place of milk: avoid</td><td>Under 5</td><td>UK NHS</td></tr>
+        <tr><td>Slush ice drinks: caution</td><td>7 and under</td><td>UK NHS</td></tr>
+        <tr><td>Shark, swordfish, marlin: avoid</td><td>Under 16</td><td>UK NHS</td></tr>
+      </table>
+      <p>The app cannot see texture, so apart from plain whole nuts it cannot warn about choking. Infant formula is never scored, labelled or compared: talk to your paediatrician.</p>
+
+      <h2>Supplements</h2>
+      <ul>
+        <li>A day’s servings of each vitamin and mineral are compared with the Tolerable Upper Intake Level, the highest daily amount likely to pose no risk. Source: <a href="https://www.canada.ca/en/health-canada/services/food-nutrition/healthy-eating/dietary-reference-intakes/tables/reference-values-vitamins.html" rel="noopener noreferrer">Health Canada, Dietary Reference Intakes</a> (shared with the US National Academies).</li>
+        <li>Caffeine is compared with the 400 mg a day the <a href="https://www.fda.gov/consumers/consumer-updates/spilling-beans-how-much-caffeine-too-much" rel="noopener noreferrer">US FDA</a> cites for most adults.</li>
+        <li>St. John’s wort carries the medicines warning from the <a href="https://www.nccih.nih.gov/health/st-johns-wort" rel="noopener noreferrer">US National Center for Complementary and Integrative Health</a>.</li>
+        <li>The app does not say whether a supplement works, cannot detect contamination, and does not check for children under 4.</li>
+      </ul>
+
+      <h2>Cosmetics</h2>
+      <p>The app lists ingredients that a regulator has banned or restricted, naming the rule each time, mainly the <a href="https://eur-lex.europa.eu/eli/reg/2009/1223/oj" rel="noopener noreferrer">EU Cosmetics Regulation 1223/2009</a> and its updates such as <a href="https://eur-lex.europa.eu/eli/reg/2021/1902/oj" rel="noopener noreferrer">Regulation 2021/1902</a>. A rule in one region is stated as a rule in that region, not as a worldwide fact.</p>
+
+      <h2>Pets</h2>
+      <p>Foods are checked for ingredients the <a href="https://www.aspca.org/pet-care/animal-poison-control/people-foods-avoid-feeding-your-pets" rel="noopener noreferrer">ASPCA Animal Poison Control Center</a> lists as harmful to dogs or cats. A human food with none of them is never shown as suitable for a pet, only as “no toxins found”.</p>
+
+      <h2>How processed is it?</h2>
+      <p>The group shown (1 to 4) is the <a href="https://world.openfoodfacts.org/nova" rel="noopener noreferrer">NOVA classification</a>, developed by researchers at the University of São Paulo and assigned to each product by Open Food Facts. It describes how a food is made. When the database has no group, the app may show its own estimate, clearly marked as an estimate.</p>
+
+      <h2>Others on this shelf</h2>
+      <p>Shown only when you ask. A product is listed only if it is of the same kind, sold in your country, scanned by enough people to be a real and checked entry, passes your whole profile, contains no sweeteners or added caffeine, and is not higher in sugar, salt or saturated fat. The line under each is a fact from its label. Nobody can pay to appear, and Greenlit earns nothing from any product.</p>
+
+      <h2>Where the data comes from, and its limits</h2>
+      <ul>
+        <li><a href="https://world.openfoodfacts.org" rel="noopener noreferrer">Open Food Facts</a>, <a href="https://world.openbeautyfacts.org" rel="noopener noreferrer">Open Beauty Facts</a> and <a href="https://world.openpetfoodfacts.org" rel="noopener noreferrer">Open Pet Food Facts</a>: volunteer-run public databases.</li>
+        <li><a href="https://fdc.nal.usda.gov" rel="noopener noreferrer">USDA FoodData Central</a>, the <a href="https://dsld.od.nih.gov" rel="noopener noreferrer">NIH Dietary Supplement Label Database</a> and <a href="https://open.fda.gov" rel="noopener noreferrer">openFDA</a> recall notices: US government data.</li>
+        <li>Entries can be wrong, incomplete or out of date, and makers change recipes. <strong>The printed pack is always the authority.</strong> If an entry is wrong, each result links to where it can be corrected for everyone.</li>
+      </ul>
+
+      <h2>What Greenlit does not do</h2>
+      <ul>
+        <li>It does not test or inspect products.</li>
+        <li>It does not give medical, dietary or veterinary advice.</li>
+        <li>It does not rate companies or brands.</li>
+        <li>It takes no money from manufacturers, shows no ads and sells nothing.</li>
+      </ul>
+      <p class="muted">Spotted a rule that looks wrong? <a href="./support.html">Tell us</a>.</p>
+    </main>
+  </body>
+</html>

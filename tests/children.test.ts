@@ -129,3 +129,99 @@ describe('children: together with the rest of the profile', () => {
     expect(check(food({ ingredientsText: 'white wine vinegar, mustard seeds' }), '4-8').level).toBe('safe');
   });
 });
+
+import { isInfantFormula } from '../src/engine/children';
+import { isMicronutrient, parseIngredients, plainNutrient } from '../src/ingredients';
+
+describe('infant formula is not ordinary food', () => {
+  const SIMILAC =
+    'Corn syrup solids, soy protein isolate, high oleic safflower oil, sugar, coconut oil, soy oil, less than 2% of: schizochytrium sp. oil, mortierella alpina oil, calcium phosphate, potassium citrate, potassium chloride, salt, magnesium chloride, l-methionine, ascorbic acid, choline chloride, potassium hydroxide, taurine, ascorbyl palmitate, ferrous sulfate, inositol, zinc sulfate, mixed tocopherols, l-carnitine, niacinamide, d-alpha-tocopheryl acetate, calcium pantothenate, cupric sulfate, thiamine hydrochloride, vitamin a palmitate, riboflavin, pyridoxine hydrochloride, folic acid, manganese sulfate, beta-carotene, potassium iodide, biotin, sodium selenite, vitamin d3, vitamin b12';
+  const formula: ProductData = { name: 'Similac Soy Isomil', brand: 'Similac', ingredientsText: SIMILAC, allergens: ['soybeans'], traces: [], labels: [], source: 'openfoodfacts', kind: 'food', ingredientLangs: ['en'] };
+  const check = (p: ProductData, age: Parameters<typeof withChildChecks>[2], profile = EMPTY_PROFILE) => withChildChecks(computeVerdict(p, profile), p, age);
+
+  it('is recognised by category, by name, or by brand plus a formula-like ingredient list', () => {
+    expect(isInfantFormula(formula)).toBe(true);
+    expect(isInfantFormula({ ...formula, name: 'First infant milk', brand: 'Store brand', categories: ['baby-foods', 'infant-formulas'] })).toBe(true);
+    expect(isInfantFormula({ ...formula, name: 'Stage 1 baby formula', brand: undefined })).toBe(true);
+    // Not formula: ordinary milk, a protein shake, baby rice.
+    expect(isInfantFormula(PRODUCTS.find((p) => p.name === 'Whole milk')!)).toBe(false);
+    expect(isInfantFormula({ ...formula, name: 'Whey protein shake', brand: 'Acme', ingredientsText: 'whey protein, cocoa, sucralose' })).toBe(false);
+    expect(isInfantFormula(PRODUCTS.find((p) => p.name === 'Apple puree, nothing added')!)).toBe(false);
+  });
+
+  it('a baby is never told formula is "not for this age" because it contains corn syrup or sugar', () => {
+    expect(childConcerns(formula, 'under1')).toEqual({ notForAge: [], caution: [] });
+    expect(check(formula, 'under1').level).toBe('safe');
+    expect(check(formula, '1').level).toBe('safe');
+  });
+
+  it('allergies are still checked: soy formula is NOT SAFE for a baby allergic to soy', () => {
+    const v = check(formula, 'under1', { ...EMPTY_PROFILE, allergies: ['soy'] });
+    expect(v.level).toBe('not-safe');
+    expect(v.reasons.join(' ')).toMatch(/soy/i);
+    // ...and reported clean, with the data warning, for a baby allergic to egg.
+    expect(check(formula, 'under1', { ...EMPTY_PROFILE, allergies: ['egg'] }).level).toBe('safe');
+  });
+
+  it('the "less than 2% of:" heading is not shown as part of an ingredient', () => {
+    const items = parseIngredients(SIMILAC).items;
+    expect(items).toContain('Schizochytrium sp. oil');
+    expect(items.some((i) => /less than/i.test(i))).toBe(false);
+    expect(items.length).toBe(40);
+  });
+
+  it('the vitamins and minerals are recognised so they can be grouped, and the real ingredients are not', () => {
+    const items = parseIngredients(SIMILAC).items;
+    const micro = items.filter(isMicronutrient);
+    expect(micro.length).toBeGreaterThanOrEqual(28);
+    for (const real of ['Corn syrup solids', 'Soy protein isolate', 'High oleic safflower oil', 'Sugar', 'Coconut oil', 'Soy oil', 'Salt']) expect(isMicronutrient(real), real).toBe(false);
+    for (const m of ['Ferrous sulfate', 'Vitamin d3', 'Folic acid', 'Potassium iodide', 'Taurine', 'Riboflavin', 'Calcium phosphate']) expect(isMicronutrient(m), m).toBe(true);
+    expect(isMicronutrient('Sodium chloride')).toBe(false); // that is just salt
+  });
+
+  it('every chemical name on the real Similac label gets its everyday name and the right group', () => {
+    const named = Object.fromEntries(parseIngredients(SIMILAC).items.map((i) => [i.toLowerCase(), plainNutrient(i)]));
+    const is = (label: string, group: string, plain: string) => expect(named[label], label).toEqual({ group, plain });
+    is('pyridoxine hydrochloride', 'vitamin', 'Vitamin B6');
+    is('thiamine hydrochloride', 'vitamin', 'Vitamin B1');
+    is('riboflavin', 'vitamin', 'Vitamin B2');
+    is('niacinamide', 'vitamin', 'Vitamin B3');
+    is('calcium pantothenate', 'vitamin', 'Vitamin B5'); // a vitamin, not "calcium"
+    is('folic acid', 'vitamin', 'Folate (vitamin B9)');
+    is('biotin', 'vitamin', 'Biotin (vitamin B7)');
+    is('vitamin b12', 'vitamin', 'Vitamin B12');
+    is('ascorbic acid', 'vitamin', 'Vitamin C');
+    is('ascorbyl palmitate', 'vitamin', 'Vitamin C');
+    is('vitamin d3', 'vitamin', 'Vitamin D');
+    is('mixed tocopherols', 'vitamin', 'Vitamin E');
+    is('d-alpha-tocopheryl acetate', 'vitamin', 'Vitamin E');
+    is('vitamin a palmitate', 'vitamin', 'Vitamin A');
+    is('beta-carotene', 'vitamin', 'Beta-carotene (the body makes vitamin A from it)');
+    is('ferrous sulfate', 'mineral', 'Iron');
+    is('zinc sulfate', 'mineral', 'Zinc');
+    is('cupric sulfate', 'mineral', 'Copper');
+    is('manganese sulfate', 'mineral', 'Manganese');
+    is('calcium phosphate', 'mineral', 'Calcium');
+    is('magnesium chloride', 'mineral', 'Magnesium');
+    is('potassium citrate', 'mineral', 'Potassium');
+    is('potassium chloride', 'mineral', 'Potassium');
+    is('potassium hydroxide', 'mineral', 'Potassium');
+    is('potassium iodide', 'mineral', 'Iodine'); // named for the iodine
+    is('sodium selenite', 'mineral', 'Selenium'); // named for the selenium
+    is('schizochytrium sp. oil', 'other', 'DHA, an omega-3 fat (from algae)');
+    is('mortierella alpina oil', 'other', 'ARA, an omega-6 fat');
+    // Spellings from the entry you scanned, including the typo printed in the database.
+    expect(plainNutrient('Crypthecodinium cohnii oil')?.plain).toBe('DHA, an omega-3 fat (from algae)');
+    expect(plainNutrient('Crypthecodinium Cohnii Oil')?.plain).toBe('DHA, an omega-3 fat (from algae)');
+    expect(plainNutrient('M. alpina oil')?.plain).toBe('ARA, an omega-6 fat');
+    is('choline chloride', 'other', 'Choline');
+    is('taurine', 'other', 'Taurine');
+    is('inositol', 'other', 'Inositol');
+    is('l-carnitine', 'other', 'Carnitine');
+    is('l-methionine', 'other', 'Amino acid');
+    // Ordinary ingredients are left alone.
+    for (const plain of ['corn syrup solids', 'soy protein isolate', 'high oleic safflower oil', 'sugar', 'coconut oil', 'soy oil', 'salt']) expect(named[plain], plain).toBeNull();
+    // Nothing on the label is left without a home.
+    expect(Object.values(named).filter((v) => v === null)).toHaveLength(7);
+  });
+});

@@ -9,7 +9,7 @@ import { HOSTS, mapOffProduct } from './off';
 
 const FIELDS = [
   'code', 'product_name', 'brands', 'image_small_url', 'image_front_url', 'ingredients_text', 'ingredients_text_en', 'lc', 'ingredients',
-  'allergens_tags', 'traces_tags', 'labels_tags', 'nutriscore_grade', 'nova_group', 'nutriments', 'categories_tags', 'countries_tags', 'last_image_t', 'last_modified_t', 'ingredients_n', 'unknown_ingredients_n',
+  'allergens_tags', 'traces_tags', 'labels_tags', 'nutriscore_grade', 'nova_group', 'nutriments', 'categories_tags', 'countries_tags', 'last_image_t', 'last_modified_t', 'ingredients_n', 'unknown_ingredients_n', 'unique_scans_n',
 ].join(',');
 
 /** "en-IN" → "india": the country tag the database uses, taken from the phone's region setting. */
@@ -27,10 +27,11 @@ export function countryTag(locale: string | undefined): string | null {
 async function search(category: string, country: string | null, signal: AbortSignal): Promise<ProductData[]> {
   const params = [
     `categories_tags=${encodeURIComponent(`en:${category}`)}`,
-    'nutrition_grades_tags=a%7Cb%7Cc',
+    'nutrition_grades_tags=a%7Cb',
     country ? `countries_tags=${encodeURIComponent(`en:${country}`)}` : '',
-    'sort_by=nutriscore_score',
-    'page_size=40',
+    // Most-scanned first: well-known products with entries many people have looked at, not obscure mis-filed ones.
+    'sort_by=unique_scans_n',
+    'page_size=50',
     `fields=${FIELDS}`,
   ].filter(Boolean);
   const res = await fetch(`${HOSTS.food}/api/v2/search?${params.join('&')}`, { referrerPolicy: 'no-referrer', signal });
@@ -41,39 +42,40 @@ async function search(category: string, country: string | null, signal: AbortSig
     .map((p: any) => mapOffProduct(p.code, p, 'food', 'en'));
 }
 
-export type Alternatives = { items: ProductData[]; local: boolean };
+/**
+ * The shelves to look on, nearest first: the product's own narrow category, then up to two wider
+ * ones. Never the top of the tree ("beverages", "snacks"), which is a different aisle altogether.
+ */
+export function shelvesFor(product: ProductData): string[] {
+  const cats = (product.categories ?? []).filter((c) => /^[a-z0-9-]+$/.test(c));
+  const usable = cats.slice(Math.min(2, Math.max(0, cats.length - 1)));
+  const n = usable.length;
+  return [...new Set([usable[n - 1], usable[n - 2], usable[n - 4] ?? usable[n - 3]].filter((c): c is string => !!c))];
+}
 
 /**
- * At most three requests, most specific first, stopping as soon as enough candidates are found:
- * the same narrow category in the user's country, then one level broader, then anywhere.
+ * At most three requests, nearest shelf first, stopping as soon as enough good options are found.
+ * Only products sold in the user's country are asked for: an option you can't buy is not an option.
  */
-export async function findAlternatives(product: ProductData, country: string | null, enough: (items: ProductData[]) => boolean): Promise<Alternatives> {
-  const cats = (product.categories ?? []).filter((c) => /^[a-z0-9-]+$/.test(c));
-  if (!cats.length) return { items: [], local: false };
-  const narrow = cats[cats.length - 1];
-  // The last tags are often one product wide ("coated chocolate bar without biscuit"): two levels up is the real shelf.
-  const broader = cats[cats.length - 3] ?? cats[cats.length - 2] ?? null;
-  const plan: [string, string | null][] = [];
-  if (country) plan.push([narrow, country]);
-  if (country && broader) plan.push([broader, country]);
-  plan.push([broader ?? narrow, null]);
-
+export async function findAlternatives(product: ProductData, country: string | null, enough: (items: ProductData[]) => boolean): Promise<ProductData[]> {
+  const shelves = shelvesFor(product);
+  const where = country ?? product.countries?.[0] ?? null;
+  if (!shelves.length || !where) return [];
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20_000);
-  let best: Alternatives = { items: [], local: false };
+  const timer = setTimeout(() => controller.abort(), 25_000);
+  const all = new Map<string, ProductData>();
   let failures = 0;
   try {
-    for (const [category, where] of plan.slice(0, 3)) {
+    for (const shelf of shelves) {
       try {
-        const items = (await search(category, where, controller.signal)).filter((c) => c.barcode !== product.barcode && c.kind === 'food');
-        if (items.length > best.items.length) best = { items, local: !!where };
-        if (enough(items)) return { items, local: !!where };
+        for (const c of await search(shelf, where, controller.signal)) if (c.barcode && c.kind === 'food') all.set(c.barcode, c);
+        if (enough([...all.values()])) break;
       } catch {
         failures++;
       }
     }
-    if (!best.items.length && failures === Math.min(3, plan.length)) throw new Error('search failed');
-    return best;
+    if (!all.size && failures === shelves.length) throw new Error('search failed');
+    return [...all.values()];
   } finally {
     clearTimeout(timer);
   }

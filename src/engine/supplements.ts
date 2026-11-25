@@ -119,7 +119,7 @@ export function dailyTotals(items: { facts: SupplementFact[]; perDay?: number }[
     .sort((a, b) => b.share - a.share);
 }
 
-export const doseText = (d: DoseLine) => `${trim(d.amount)} ${d.unit} a day — the safe upper limit is ${trim(d.limit)} ${d.unit}`;
+export const doseText = (d: DoseLine) => `${trim(d.amount)} ${d.unit} a day — the official upper limit is ${trim(d.limit)} ${d.unit}`;
 
 /* ---------- other label checks ---------- */
 
@@ -234,7 +234,7 @@ export function proteinFacts(p: ProductData): { grams: number; share: number | n
 
 export function computeSupplementVerdict(product: ProductData, profile: Profile, band: AgeBand = 'adult'): Verdict {
   if (band === 'under1' || band === '1' || band === '2-3') {
-    return { level: 'unknown', reasons: ['Not checked for children under 4. Their safe amounts are much lower. Ask a doctor before giving any supplement.'], warnings: [] };
+    return { level: 'unknown', reasons: ['Not checked for children under 4. Their upper limits are much lower. Ask a doctor before giving any supplement.'], warnings: [] };
   }
   // Allergies, diet rules and the avoid list work exactly as for food.
   const base = computeVerdict({ ...product, nutriments: undefined }, profile);
@@ -262,5 +262,5 @@ export function computeSupplementVerdict(product: ProductData, profile: Profile,
       warnings: ['The amounts per serving aren’t in the database, so doses were not checked. Photograph the Supplement Facts panel to check them.'],
     };
   }
-  return { level: 'safe', reasons: ['Nothing clashes with your profile, and no vitamin or mineral is above its safe upper limit.'], warnings: base.warnings };
+  return { level: 'safe', reasons: ['Nothing clashes with your profile, and no vitamin or mineral is above its official upper limit.'], warnings: base.warnings };
 }

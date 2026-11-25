@@ -81,7 +81,7 @@ const NOVA_TITLE = {
   1: 'Unprocessed or minimally processed',
   2: 'Processed cooking ingredient',
   3: 'Processed food',
-  4: 'Ultra-processed food',
+  4: 'Ultra-processed',
 } as const;
 
 const NOVA_TEXT = {
@@ -205,14 +205,14 @@ export function explain(product: ProductData, profile: Profile, verdict: Verdict
   let processing: Processing | null = null;
   const nova = product.novaGroup;
   if (nova === 1 || nova === 2 || nova === 3 || nova === 4) {
-    processing = { group: nova, estimated: false, title: NOVA_TITLE[nova], text: NOVA_TEXT[nova], source: nova === 4 ? 'WHO, 2026; US Dietary Guidelines 2025–2030' : undefined };
+    processing = { group: nova, estimated: false, title: NOVA_TITLE[nova], text: NOVA_TEXT[nova], source: nova === 4 ? 'NOVA classification (University of São Paulo), group assigned by Open Food Facts. Health context: WHO, 2026; US Dietary Guidelines 2025–2030' : 'NOVA classification (University of São Paulo), group assigned by Open Food Facts' };
   } else if (main) {
     const markers = eNumbers(main).length + findAll(main, ADDITIVE_WORDS, 6).length + (findTerm(main, HYDROGENATED) ? 1 : 0) + (findTerm(main, SWEETENERS) ? 1 : 0);
     if (markers >= 3) {
-      processing = { group: 4, estimated: true, title: 'Probably ultra-processed', text: `No official rating for this product, but its ingredient list has several signs of industrial processing. ${NOVA_TEXT[4]}`, source: 'Estimated from ingredients' };
+      processing = { group: 4, estimated: true, title: 'Likely group 4 (our estimate)', text: `The database has no NOVA group for this product. Its ingredient list names several additives typical of group 4, so this is an estimate, not a classification. ${NOVA_TEXT[4]}`, source: 'Estimated from the ingredient list by Greenlit' };
     }
   }
-  if (processing?.group === 4) insights.push({ tone: 'warn', short: 'ultra-processing', title: processing.estimated ? 'Probably ultra-processed' : 'Ultra-processed', detail: 'See “How processed is it?” below.' });
+  if (processing?.group === 4) insights.push({ tone: 'warn', short: 'ultra-processing', title: processing.estimated ? 'Likely NOVA group 4 (estimate)' : 'NOVA group 4: ultra-processed', detail: 'A classification of how a food is made. See “How processed is it?” below.' });
   if (processing?.group === 1) insights.push({ tone: 'good', short: 'minimal processing', title: 'Minimally processed' });
 
   // --- headline + summary ---
@@ -228,7 +228,7 @@ export function explain(product: ProductData, profile: Profile, verdict: Verdict
     summary = `${verdict.reasons[0]}${negatives.length ? ` Beyond that, it has ${list(negatives.slice(0, 3))}.` : ''}`;
   } else if (!score) {
     headline = verdict.level === 'unknown' ? 'We can’t be sure about this one.' : 'Not much to go on.';
-    summary = negatives.length ? `From what is listed: ${list(negatives.slice(0, 3))}.` : 'There isn’t enough nutrition data to judge how healthy it is. Check the label.';
+    summary = negatives.length ? `From what is listed: ${list(negatives.slice(0, 3))}.` : 'There isn’t enough nutrition data to describe it. Check the label.';
   } else if (score.value >= 60) {
     headline = verdict.level === 'unknown' ? 'Looks healthy, but can’t be confirmed for your rules.' : score.value >= 80 ? 'A great choice for you.' : 'A good choice for you.';
     summary = `${positives.length ? `${cap(list(positives.slice(0, 3)))}.` : 'Nothing stands out as a concern.'}${negatives.length ? ` Worth knowing: ${list(negatives.slice(0, 2))}.` : ''}`;

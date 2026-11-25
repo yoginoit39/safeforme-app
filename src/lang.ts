@@ -1,3 +1,4 @@
+import { eNumberName } from './enumbers';
 import { recognised } from './ingredients';
 /** Language the user wants product names and ingredient lists in. The app's own text stays English. */
 
@@ -58,7 +59,7 @@ export function looksLikeIngredients(text: string): boolean {
   return !(long.length >= 2 && longShare >= 0.45 && total / parts.length >= 6);
 }
 
-type Parsed = { id?: unknown; text?: unknown; is_in_taxonomy?: unknown };
+type Parsed = { id?: unknown; text?: unknown; is_in_taxonomy?: unknown; ingredients?: unknown };
 
 /** Canonical ingredient ids ('en:palm-oil') that the database recognised, in list order. */
 export function recognisedIds(ingredients: unknown): { ids: string[]; total: number } {
@@ -68,24 +69,25 @@ export function recognisedIds(ingredients: unknown): { ids: string[]; total: num
 }
 
 /** Readable name from a canonical id: 'en:palm-oil' → 'palm oil'. */
-export const idToEnglish = (id: string): string => id.replace(/^en:/, '').replace(/-/g, ' ');
+export const idToEnglish = (id: string): string => eNumberName(id) ?? id.replace(/^en:/, '').replace(/-/g, ' ');
 
 /**
  * Builds a translated list from the names the database knows. Returns nothing unless most
  * of the list could be translated: a half-translated list would mislead.
  */
-export function buildTranslation(ingredients: unknown, nameFor: (id: string) => string | undefined): string | undefined {
+export function buildTranslation(ingredients: unknown, nameFor: (id: string) => string | undefined, keepUnknown = true): string | undefined {
   const list = Array.isArray(ingredients) ? (ingredients as Parsed[]) : [];
   if (list.length < 1) return undefined;
   let done = 0;
-  const out = list.map((i) => {
+  const one = (i: Parsed, top: boolean): string => {
     const id = typeof i?.id === 'string' ? i.id : '';
     const name = recognised(i) ? nameFor(id) : undefined;
-    if (name) {
-      done++;
-      return name.toLowerCase();
-    }
-    return typeof i?.text === 'string' ? i.text : '';
-  }).filter(Boolean);
+    if (name && top) done++;
+    const label = name ? (/\(E\d/.test(name) ? name : name.toLowerCase()) : keepUnknown && typeof i?.text === 'string' ? i.text : '';
+    // What an ingredient is made of matters as much as its name: "flavouring (caffeine)".
+    const inner = (Array.isArray(i?.ingredients) ? (i.ingredients as Parsed[]) : []).map((x) => one(x, false)).filter(Boolean);
+    return label && inner.length ? `${label} (${inner.join(', ')})` : label;
+  };
+  const out = list.map((i) => one(i, true)).filter(Boolean);
   return done / list.length >= 0.7 ? out.join(', ') : undefined;
 }

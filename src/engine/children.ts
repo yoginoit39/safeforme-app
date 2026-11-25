@@ -33,13 +33,31 @@ const NOT_WHOLE = /butter|spread|flour|milk|drink|oil|bar|cookie|biscuit|chocola
 
 export type ChildConcerns = { notForAge: string[]; caution: string[] };
 
+/**
+ * Infant formula is its own thing. It is a baby's whole diet, its recipe is set by law, and an app
+ * that scores it, calls it "ultra-processed" or suggests another one could do real harm.
+ * So it is recognised first and none of the ordinary food rules are applied to it.
+ */
+export function isInfantFormula(product: ProductData): boolean {
+  const cats = (product.categories ?? []).join(' ');
+  const name = product.name ?? '';
+  if (/infant-formula|baby-formula|baby-milks?\b|infant-milks?|first-age-milks?|follow-on-milks?|follow-on-formula|growing-up-milks?|milks?-for-babies|laits?-infantiles?|laits?-1er-age|preparations-pour-nourrissons|sauglingsmilch|anfangsmilch/i.test(cats)) return true;
+  if (/\b(infant|baby) formula\b|\bformula (for|milk)\b.*\b(infant|bab(y|ies))|\bfirst infant milk\b|\bfollow[- ]on (milk|formula)\b|\blait (infantile|1er âge)\b|\bpréparation pour nourrissons\b/i.test(name)) return true;
+  const label = `${name} ${product.brand ?? ''}`;
+  // Brands that make formula and nothing else.
+  if (/\b(similac|enfamil|aptamil|nutramigen|alimentum|isomil|kendamil|lactogen|enfagrow)\b/i.test(label)) return true;
+  // Brands that also make other baby food: formula only when the ingredient list reads like formula.
+  return /\b(gerber good start|nan (pro|optipro)|hipp|cow ?& ?gate|sma|bobbie|holle|earth'?s best|parent'?s choice|up ?& ?up)\b/i.test(label)
+    && /\b(ferrous sulfate|taurine|l-carnitine|nucleotides|choline (chloride|bitartrate))\b/i.test(product.ingredientsText ?? '');
+}
+
 const UNDER_4: AgeBand[] = ['under1', '1', '2-3'];
 export const isUnder4 = (age: AgeBand) => UNDER_4.includes(age);
 export const AGE_LABEL: Record<AgeBand, string> = { under1: 'under 1', '1': 'age 1', '2-3': 'ages 2–3', '4-8': 'ages 4–8', '9-18': 'ages 9–18', adult: 'adults' };
 
 export function childConcerns(product: ProductData, age: AgeBand): ChildConcerns {
   const out: ChildConcerns = { notForAge: [], caution: [] };
-  if (age === 'adult') return out;
+  if (age === 'adult' || isInfantFormula(product)) return out;
   const text = (product.ingredientsText ?? '').toLowerCase();
   const name = product.name ?? '';
   const cats = (product.categories ?? []).join(' ');

@@ -62,3 +62,48 @@ describe('product language', () => {
     expect(buildTranslation(list, idToEnglish)).toBeUndefined();
   });
 });
+
+import { computeVerdict } from '../src/engine/verdict';
+import { computePetVerdict as petVerdict } from '../src/engine/pets';
+import { childConcerns } from '../src/engine/children';
+import { eNumberName } from '../src/enumbers';
+import { EMPTY_PROFILE } from '../src/types';
+
+describe('a product the database only lists in another language', () => {
+  // The Polish Coca-Cola entry from the screenshot.
+  const polishCola = {
+    product_name: 'Coca-Cola', lc: 'pl',
+    ingredients_text: 'woda, cukier, dwutlenek węgla, barwnik: karmel E150d, regulator kwasowości: kwas fosforowy, aromaty: w tym kofeina (0,01 g/100 ml produktu).',
+    ingredients: [
+      { id: 'en:water', text: 'woda', is_in_taxonomy: 1 }, { id: 'en:sugar', text: 'cukier', is_in_taxonomy: 1 },
+      { id: 'en:e290', text: 'dwutlenek węgla', is_in_taxonomy: 1 }, { id: 'en:e150d', text: 'e150d', is_in_taxonomy: 1 },
+      { id: 'en:e338', text: 'kwas fosforowy', is_in_taxonomy: 1 },
+      { id: 'en:flavouring', text: 'aromaty', is_in_taxonomy: 1, ingredients: [{ id: 'en:caffeine', text: 'w tym kofeina', is_in_taxonomy: 1 }] },
+    ],
+  };
+  const p = mapOffProduct('5900000000001', polishCola, 'food', 'en');
+
+  it('is shown in English, additives by name, and what a flavouring contains is not dropped', () => {
+    expect(p.ingredientsTranslated).toBe('water, sugar, carbon dioxide (E290), sulphite ammonia caramel (E150d), phosphoric acid (E338), flavouring (caffeine)');
+  });
+
+  it('the caffeine written as "kofeina" is still caught for a baby and for a dog', () => {
+    expect(childConcerns(p, 'under1').notForAge.join(' ')).toMatch(/caffeine/i);
+    expect(childConcerns(p, '9-18').caution.join(' ')).toMatch(/caffeine/i);
+    expect(petVerdict(p, 'dog').level).toBe('not-safe');
+  });
+
+  it('counts as checkable for allergies, and caramel colour is not mistaken for sulphites', () => {
+    expect(p.ingredientLangs).toContain('en');
+    const v = computeVerdict(p, { ...EMPTY_PROFILE, allergies: ['sulphites', 'milk'] });
+    expect(v.level).toBe('safe');
+  });
+
+  it('additive codes have their official names', () => {
+    expect(eNumberName('en:e290')).toBe('carbon dioxide (E290)');
+    expect(eNumberName('E-150d')).toBe('sulphite ammonia caramel (E150d)');
+    expect(eNumberName('e330')).toBe('citric acid (E330)');
+    expect(eNumberName('e9999')).toBeUndefined();
+    expect(eNumberName('sugar')).toBeUndefined();
+  });
+});

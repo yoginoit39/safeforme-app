@@ -420,7 +420,8 @@ legend { font-family: var(--display); font-weight: 700; font-size: 1.3rem; lette
 .nova__step--1.is-on { background: var(--excellent); }
 .nova__step--2.is-on { background: var(--good); }
 .nova__step--3.is-on { background: var(--okay); }
-.nova__step--4.is-on { background: var(--bad); }
+/* A classification, not an alarm: the selected group is marked in ink, not in red. */
+.nova__step--1.is-on, .nova__step--2.is-on, .nova__step--3.is-on, .nova__step--4.is-on { background: var(--ink); }
 .nova__title { font-family: var(--display); font-weight: 700; font-size: 1.25rem; letter-spacing: -0.02em; line-height: 1.15; }
 .source { font-size: 0.78rem !important; color: var(--faint); }
 
@@ -543,3 +544,8 @@ legend { font-family: var(--display); font-weight: 700; font-size: 1.3rem; lette
 .alt__score.band--excellent { background: var(--excellent); }
 .alt__score.band--good { background: var(--good); }
 .alt .thumb { background: #fff; }
+.alt__text small.alt__why { color: var(--green-deep); font-weight: 600; }
+.ing--nutrients .ing__chip, .ing__chip--nutrient { background: #eef7e6; color: var(--ink); font-weight: 600; font-size: 0.86rem; padding: 6px 11px; }
+.ing__chip--nutrient small { font-weight: 400; color: var(--muted); }
+.verdict__reasons a, .verdict__warning a { color: inherit; text-decoration: underline; font-weight: inherit; }
+.fam__row small a, .source a { color: inherit; text-decoration: underline; }
