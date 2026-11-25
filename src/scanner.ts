@@ -12,7 +12,6 @@ const getDetector = (): BarcodeDetectorCtor | undefined =>
 
 export const scannerSupported = (): boolean => !!navigator.mediaDevices?.getUserMedia;
 
-export type ScanSession = { stop(): void };
 
 type FrameReader = (video: HTMLVideoElement) => Promise<string | null>;
 
@@ -92,26 +91,88 @@ async function fallbackReader(): Promise<FrameReader> {
   };
 }
 
+export type ScanProblem = 'slow' | 'stalled';
+export type ScanSession = {
+  stop(): void;
+  /** Moves the live picture to a new <video> after the screen was redrawn. */
+  attach(video: HTMLVideoElement): void;
+  /** Phone flashlight, where the camera has one. Resolves to whether it is now on. */
+  torch(on: boolean): Promise<boolean>;
+  readonly hasTorch: boolean;
+};
+
+const OPEN_TIMEOUT_MS = 10_000;
+const STALL_MS = 3_500;
+const SLOW_MS = 9_000;
+
+/** Opens the back camera. Never hangs: a camera that does not answer is treated as a failure. */
+function openCamera(): Promise<MediaStream> {
+  return new Promise((resolve, reject) => {
+    let done = false;
+    const timer = window.setTimeout(() => {
+      done = true;
+      reject(new Error('camera-timeout'));
+    }, OPEN_TIMEOUT_MS);
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } }, audio: false })
+      .then((stream) => {
+        if (done) return stream.getTracks().forEach((t) => t.stop()); // answered too late: let it go
+        done = true;
+        window.clearTimeout(timer);
+        resolve(stream);
+      })
+      .catch((e) => {
+        if (done) return;
+        done = true;
+        window.clearTimeout(timer);
+        reject(e);
+      });
+  });
+}
+
+/** Keeps focus adjusting as the pack moves. Zoom is deliberately never touched. */
+function keepFocusing(stream: MediaStream): void {
+  const track = stream.getVideoTracks()[0];
+  const caps = (track?.getCapabilities?.() ?? {}) as { focusMode?: string[] };
+  if (caps.focusMode?.includes('continuous')) {
+    void track.applyConstraints({ advanced: [{ focusMode: 'continuous' } as MediaTrackConstraintSet] }).catch(() => undefined);
+  }
+}
+
 /**
  * Starts the camera in `video` and calls `onCode` once with the first barcode seen.
- * Rejects if the camera can't be opened (e.g. permission denied).
+ * Rejects if the camera can't be opened (permission denied, no camera, or no answer).
+ *
+ * Built for scanning one product after another all the way round a shop:
+ * - the camera is fully released after every scan, and opened fresh for the next
+ * - a frozen picture is noticed and the camera is restarted once on its own
+ * - if the screen is redrawn mid-scan, the picture moves to the new video box
+ * - `onProblem` says when a scan is taking long or the camera can't be recovered
  */
-export async function startScan(video: HTMLVideoElement, onCode: (code: string) => void): Promise<ScanSession> {
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 } },
-    audio: false,
-  });
-  video.srcObject = stream;
-  await video.play().catch(() => undefined);
-
+export async function startScan(video: HTMLVideoElement, onCode: (code: string) => void, onProblem?: (p: ScanProblem) => void): Promise<ScanSession> {
+  let stream = await openCamera();
+  let target = video;
   let stopped = false;
   let timer = 0;
+  let torchOn = false;
+
+  const show = (v: HTMLVideoElement) => {
+    target = v;
+    if (v.srcObject !== stream) v.srcObject = stream;
+    void v.play().catch(() => undefined);
+  };
+  const release = () => {
+    stream.getTracks().forEach((t) => t.stop());
+    if (target.srcObject === stream) target.srcObject = null;
+  };
   const stop = () => {
+    if (stopped) return;
     stopped = true;
     window.clearTimeout(timer);
-    stream.getTracks().forEach((t) => t.stop());
-    video.srcObject = null;
+    release();
   };
+  show(video);
+  keepFocusing(stream);
 
   let read: FrameReader;
   try {
@@ -121,15 +182,63 @@ export async function startScan(video: HTMLVideoElement, onCode: (code: string) 
     throw e;
   }
 
+  const started = Date.now();
+  let lastMove = Date.now();
+  let lastTime = -1;
+  let restarts = 0;
+  let toldSlow = false;
+  let restarting = false;
+
+  /** The picture froze or the camera was taken away: open it again, once. */
+  const restart = async () => {
+    if (restarting || stopped) return;
+    restarting = true;
+    release();
+    try {
+      const fresh = await openCamera();
+      if (stopped) return fresh.getTracks().forEach((t) => t.stop());
+      stream = fresh;
+      torchOn = false;
+      show(target);
+      keepFocusing(stream);
+      lastMove = Date.now();
+      lastTime = -1;
+    } catch {
+      if (!stopped) onProblem?.('stalled');
+    } finally {
+      restarting = false;
+    }
+  };
+
   const tick = async () => {
     if (stopped) return;
     try {
-      if (video.readyState >= 2) {
-        const code = await read(video);
-        if (code && !stopped) {
-          stop();
-          onCode(code);
-          return;
+      const now = Date.now();
+      if (!restarting) {
+        const live = stream.getVideoTracks()[0]?.readyState === 'live';
+        if (target.currentTime !== lastTime) {
+          lastTime = target.currentTime;
+          lastMove = now;
+        }
+        if (!live || now - lastMove > STALL_MS) {
+          if (restarts < 1) {
+            restarts++;
+            await restart();
+          } else if (now - lastMove > STALL_MS * 2) {
+            onProblem?.('stalled');
+            lastMove = now + 60_000; // say it once
+          }
+        } else if (target.readyState >= 2) {
+          const code = await read(target);
+          if (code && !stopped) {
+            stop();
+            onCode(code);
+            return;
+          }
+        }
+        if (!toldSlow && now - started > SLOW_MS) {
+          toldSlow = true;
+          onProblem?.('slow');
         }
       }
     } catch {
@@ -139,5 +248,24 @@ export async function startScan(video: HTMLVideoElement, onCode: (code: string) 
   };
   void tick();
 
-  return { stop };
+  const torchCapable = () => !!(stream.getVideoTracks()[0]?.getCapabilities?.() as { torch?: boolean } | undefined)?.torch;
+  return {
+    stop,
+    attach: (v) => {
+      if (!stopped) show(v);
+    },
+    torch: async (on) => {
+      if (stopped || !torchCapable()) return false;
+      try {
+        await stream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: on } as MediaTrackConstraintSet] });
+        torchOn = on;
+      } catch {
+        // some phones report a torch they will not switch
+      }
+      return torchOn;
+    },
+    get hasTorch() {
+      return torchCapable();
+    },
+  };
 }

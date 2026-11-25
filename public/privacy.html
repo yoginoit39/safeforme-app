@@ -25,13 +25,13 @@
 
       <div class="box">
         <strong>The short version.</strong> Greenlit has no accounts, no ads, no analytics and no server of its own.
-        Your profile and history stay on your phone. The app talks to two outside services, and only when you ask it to:
-        Open Food Facts (to look up a barcode) and Google (only if you choose to use the optional AI extras with your own key).
+        Your profile and history stay on your phone. The app talks to outside services only when you ask it to:
+        public product databases (to look up a barcode or a product name) and Google (only if you choose to use the optional AI extras with your own key).
       </div>
 
       <h2>What stays on your device</h2>
       <ul>
-        <li><strong>Your profile</strong> — the allergies, dietary rules, health watch items and goal you select. This is health-related information. It is stored only in this app's storage on your device and is never sent to us or anyone else.</li>
+        <li><strong>Your profile</strong> — the allergies, dietary rules, health watch items, skin preferences and goal you select, and the same for any family members and pets you add. This is health-related information. It is stored only in this app's storage on your device and is never sent to us or anyone else.</li>
         <li><strong>Your scan history</strong> — the last 20 products you checked, and two counters shown on the home screen.</li>
         <li><strong>Your Google Gemini API key</strong>, if you add one.</li>
         <li>A few settings, such as whether you have seen the welcome screen.</li>
@@ -40,7 +40,11 @@
 
       <h2>What leaves your device, and when</h2>
       <ul>
-        <li><strong>Barcode lookups.</strong> When you scan or type a barcode, the app requests that product from <a href="https://world.openfoodfacts.org" rel="noopener noreferrer">Open Food Facts</a>, a public food database. Open Food Facts receives the barcode number and, like any website, your IP address. Product photos are loaded from its image servers. Your profile is not sent: the safety check and score are calculated on your device.</li>
+        <li><strong>Barcode lookups.</strong> When you scan or type a barcode, the app requests that product from <a href="https://world.openfoodfacts.org" rel="noopener noreferrer">Open Food Facts</a>, a public food database. If it is not there, the app asks its sister databases <a href="https://world.openbeautyfacts.org" rel="noopener noreferrer">Open Beauty Facts</a> (cosmetics) and <a href="https://world.openpetfoodfacts.org" rel="noopener noreferrer">Open Pet Food Facts</a>, and then <a href="https://fdc.nal.usda.gov" rel="noopener noreferrer">USDA FoodData Central</a> (a United States government food database). Each service asked receives the barcode number and, like any website, your IP address. Product photos are loaded from their image servers. Your profile is not sent: the safety check and score are calculated on your device.</li>
+        <li><strong>Supplements and recall notices.</strong> For a barcode that looks like a US product, the app also asks the US National Institutes of Health <a href="https://dsld.od.nih.gov" rel="noopener noreferrer">Dietary Supplement Label Database</a> for the label, and the US Food and Drug Administration (<a href="https://open.fda.gov" rel="noopener noreferrer">openFDA</a>) whether that exact barcode is under recall. Only the barcode is sent, with no profile data.</li>
+        <li><strong>Healthier options.</strong> Only when you tap “Find healthier options”, the app asks Open Food Facts for similar products, sending the product’s category and the country set on your phone. Which ones suit you is worked out on your phone; your profile is not sent.</li>
+        <li><strong>Your daily supplements.</strong> The list of supplements you save, and the age band you set for a family member, stay on your phone like the rest of your profile.</li>
+        <li><strong>Search by name.</strong> When you type a product name, those words are sent to the Open Food Facts, Open Beauty Facts and Open Pet Food Facts search services, along with your IP address. Nothing else is sent.</li>
         <li><strong>Label photos (optional).</strong> If you add your own Google Gemini API key and photograph a label, that one photo and your key are sent directly from your device to Google's Gemini API to read the text. Google handles it under its own terms and privacy policy for the key you created. Nothing is sent to Google unless you use one of these optional AI extras.</li>
         <li><strong>AI ingredient explanations (optional).</strong> If you add your key and tap “Explain these ingredients with AI”, the product’s name, ingredient list and nutrition figures are sent with your key to Google’s Gemini API. Your profile, allergies and history are not included.</li>
         <li><strong>Loading the app.</strong> The service that hosts the app's files may keep standard web server logs (such as IP address and time), as any website host does.</li>
@@ -57,20 +61,20 @@
       </ul>
 
       <h2>Deleting your data</h2>
-      <p>Open <strong>Settings → Delete all my data</strong> to erase your profile, history, counters and key from the device. Uninstalling the app or clearing its storage does the same.</p>
+      <p>Open <strong>Settings → Delete all my data</strong> to erase your profile, family and pets, history, counters and key from the device. Uninstalling the app or clearing its storage does the same.</p>
 
       <h2>Children</h2>
       <p>Greenlit is not directed at children under 13.</p>
 
       <h2>Not medical advice</h2>
-      <p>Greenlit is an information tool, not a medical device, and does not provide medical, dietary or religious advice. Product data comes from Open Food Facts, a database written by volunteers, and from automated reading of label photos; optional AI explanations are written by Google’s AI. All of these can be incomplete, out of date or wrong, and recipes change.</p>
+      <p>Greenlit is an information tool, not a medical device, and does not provide medical, veterinary, dietary or religious advice. It does not tell you whether a supplement works, cannot detect contamination, and does not check interactions with medicines beyond the notes it shows. Safe upper limits for vitamins and minerals are general figures for healthy people, not advice for you: ask a doctor or pharmacist. Product data comes from Open Food Facts, Open Beauty Facts and Open Pet Food Facts, databases written by volunteers, from USDA FoodData Central, and from automated reading of label photos; optional AI explanations are written by Google’s AI. All of these can be incomplete, out of date or wrong, and recipes change.</p>
       <p><strong>Always read the physical label before eating a product, especially if you have an allergy or a medical condition.</strong> A “Safe for you” result means no problem was found in the available data; it is not a guarantee. If in doubt, ask the manufacturer or a qualified professional. Halal and kosher status generally cannot be proven from an ingredient list; the app only reports certification labels present in the data.</p>
 
       <h2>Terms of use</h2>
       <p>The app is provided free of charge and “as is”, without warranties of any kind. To the extent permitted by law, the developer is not liable for any loss or harm arising from use of the app or reliance on its results. By using the app you accept these terms.</p>
 
       <h2>Data sources</h2>
-      <p>Product data: <a href="https://world.openfoodfacts.org" rel="noopener noreferrer">Open Food Facts</a>, available under the Open Database License (ODbL).</p>
+      <p>Product data: <a href="https://world.openfoodfacts.org" rel="noopener noreferrer">Open Food Facts</a>, <a href="https://world.openbeautyfacts.org" rel="noopener noreferrer">Open Beauty Facts</a> and <a href="https://world.openpetfoodfacts.org" rel="noopener noreferrer">Open Pet Food Facts</a>, available under the Open Database License (ODbL); and USDA FoodData Central (public domain).</p>
 
       <h2>Changes and contact</h2>
       <p>If this policy changes, the date at the top will change. For questions, use the developer contact shown on the app's store listing.</p>

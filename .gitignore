@@ -4,3 +4,8 @@ dist
 e2e-results
 signing
 release
+
+# local secrets (never commit)
+.env
+.env.*
+!.env.example

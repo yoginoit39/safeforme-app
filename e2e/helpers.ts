@@ -3,7 +3,7 @@ import { expect, type Page, type TestInfo } from '@playwright/test';
 /** Canned Open Food Facts answers, so tests are repeatable and don't hammer the real service. */
 const PRODUCTS: Record<string, object> = {
   '3017620422003': {
-    product_name: 'Nutella', brands: 'Ferrero', image_small_url: 'https://images.openfoodfacts.org/tall.svg',
+    categories_tags: ['en:spreads', 'en:sweet-spreads', 'en:hazelnut-spreads'], product_name: 'Nutella', brands: 'Ferrero', image_small_url: 'https://images.openfoodfacts.org/tall.svg',
     ingredients_text: 'Sucre, huile de palme, NOISETTES 13%, cacao maigre, LAIT écrémé en poudre, lactosérum, lécithines (SOJA), vanilline. Sans gluten.',
     ingredients_text_en: 'sugar, palm oil', allergens_tags: ['en:milk', 'en:nuts', 'en:soybeans'], traces_tags: [], labels_tags: ['en:vegetarian'],
     nutriscore_grade: 'e', nova_group: 4,
@@ -37,15 +37,51 @@ const PRODUCTS: Record<string, object> = {
 const svg = (w: number, h: number) =>
   `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#e8432b"/></svg>`;
 
+/** Canned answers from the cosmetics and pet food databases. */
+const BEAUTY: Record<string, object> = {
+  '3600000000017': {
+    product_name: 'Radiance Night Cream', brands: 'Lumière', image_small_url: 'https://images.openfoodfacts.org/tall.svg',
+    ingredients_text: 'Aqua, Glycerin, Cetearyl Alcohol, Cera Alba, Retinol, Parfum, Limonene, Linalool, Butylphenyl Methylpropional, Methylparaben, Alcohol Denat.',
+    labels_tags: [],
+  },
+};
+const PETFOOD: Record<string, object> = {
+  '7600000000012': {
+    product_name: 'Hearty Chicken Dinner', brands: 'Good Boy', categories_tags: ['en:pet-food', 'en:dog-food'],
+    ingredients_text: 'Chicken 40%, rice, carrots, peas, sunflower oil, minerals',
+  },
+};
+
 export async function mockNetwork(page: Page) {
-  await page.route('https://world.openfoodfacts.org/**', (route) => {
-    const code = /product\/(\d+)\.json/.exec(route.request().url())?.[1] ?? '';
+  const productRoute = (products: Record<string, object>) => (route: import('@playwright/test').Route) => {
+    const url = route.request().url();
+    if (url.includes('/cgi/search.pl')) {
+      const hits = Object.entries(products).map(([code, p]) => ({ code, ...(p as object) }));
+      return route.fulfill({ json: { count: hits.length, products: url.includes('search_terms=cream') ? hits : [] } });
+    }
+    const code = /product\/(\d+)\.json/.exec(url)?.[1] ?? '';
     if (code === '4040404040404') return route.abort('internetdisconnected');
-    const product = PRODUCTS[code];
+    const product = products[code];
     return product
       ? route.fulfill({ json: { code, status: 1, product } })
       : route.fulfill({ status: 404, json: { code, status: 0 } });
-  });
+  };
+  await page.route('https://world.openfoodfacts.org/**', productRoute(PRODUCTS));
+  await page.route('https://world.openbeautyfacts.org/**', productRoute(BEAUTY));
+  await page.route('https://world.openpetfoodfacts.org/**', productRoute(PETFOOD));
+  await page.route('https://api.nal.usda.gov/**', (route) => route.fulfill({ json: { foods: [] } }));
+  // Recall notices and the US supplement database: nothing found, and no real network in tests.
+  await page.route('https://api.fda.gov/**', (route) => route.fulfill({ status: 404, json: { error: { code: 'NOT_FOUND' } } }));
+  await page.route('https://api.ods.od.nih.gov/**', (route) => route.fulfill({ json: { hits: [], stats: { count: 0 } } }));
+  await page.route('https://search.openfoodfacts.org/**', (route) =>
+    route.fulfill({
+      json: {
+        hits: route.request().url().includes('q=cream')
+          ? [{ code: '8076800195057', product_name: 'Spaghetti Nº5 with cream', brands: ['Barilla'], image_small_url: 'https://images.openfoodfacts.org/wide.svg' }]
+          : [],
+      },
+    }),
+  );
   await page.route('https://images.openfoodfacts.org/**', (route) =>
     route.fulfill({ contentType: 'image/svg+xml', body: route.request().url().includes('tall') ? svg(75, 200) : svg(200, 60) }),
   );

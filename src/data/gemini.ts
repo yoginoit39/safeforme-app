@@ -1,4 +1,4 @@
-import type { Nutriments, ProductData } from '../types';
+import type { Nutriments, ProductData, SupplementInfo } from '../types';
 import { normalizeAllergenName } from '../engine/verdict';
 
 /**
@@ -19,7 +19,7 @@ let workingModel: string | null = null;
 export const lastModelUsed = (): string | null => workingModel;
 
 const INSTRUCTION =
-  'Read this food label photo (any language). Return ONLY JSON: {product_name, ingredients_text (translated to English), allergens: [..], traces: [..], nutriments: {sugars, salt, saturated_fat, fat, protein, fiber, kcal, carbs}, contains_pork, contains_alcohol, contains_gelatin, halal_certified, kosher_certified}. "allergens" are allergens the product contains as ingredients; "traces" are allergens mentioned only as "may contain" or "traces of". "nutriments" are per 100g or 100ml as numbers without units (use kcal, not kJ; a comma is a decimal point); if the label only gives per-serving values, use null. halal_certified and kosher_certified are true only if a certification mark or statement is visible. Use null for anything not visible. Do not guess.';
+  'Read this product label photo (any language). It may be food, a cosmetic, pet food or a dietary supplement. Return ONLY JSON: {product_type, product_name, ingredients_text (translated to English), allergens: [..], traces: [..], nutriments: {sugars, salt, saturated_fat, fat, protein, fiber, kcal, carbs}, contains_pork, contains_alcohol, contains_gelatin, halal_certified, kosher_certified, supplement_facts, serving_size, serving_grams, servings_per_day, proprietary_blends}. product_type is "supplement" for vitamins, minerals, protein powders, pre-workouts, herbal capsules and anything with a Supplement Facts panel; "cosmetic" for skincare, haircare, make-up, soap, toothpaste and similar; "dog_food", "cat_food" or "pet_food" for animal food; otherwise "food". For a cosmetic, ingredients_text keeps the ingredient names as printed (INCI names) and nutriments is null. "allergens" are allergens the product contains as ingredients; "traces" are allergens mentioned only as "may contain" or "traces of". "nutriments" are per 100g or 100ml as numbers without units (use kcal, not kJ; a comma is a decimal point); if the label only gives per-serving values, use null. halal_certified and kosher_certified are true only if a certification mark or statement is visible. For a supplement: supplement_facts lists every row of the Supplement Facts panel as {name, amount, unit} PER SERVING exactly as printed (amount is a number; unit is mg, mcg, g or IU; keep the form in the name, e.g. "Vitamin A (as beta-carotene)" or "Folate (mcg DFE)"); skip rows with no amount; serving_size is the printed serving ("2 capsules"); serving_grams is the serving weight in grams if printed; servings_per_day is the highest number of servings a day the directions allow, as a number; proprietary_blends lists the names of blends that show one total but not the amount of each ingredient inside; ingredients_text holds the "Other ingredients" plus the names of the active ingredients. Use null for anything not visible. Do not guess.';
 
 /** Forces the reply into exactly this shape, so field names never vary between models. */
 const NUM = { type: 'NUMBER', nullable: true };
@@ -27,6 +27,7 @@ const BOOL = { type: 'BOOLEAN', nullable: true };
 const LABEL_SCHEMA = {
   type: 'OBJECT',
   properties: {
+    product_type: { type: 'STRING', enum: ['food', 'cosmetic', 'dog_food', 'cat_food', 'pet_food', 'supplement'], nullable: true },
     product_name: { type: 'STRING', nullable: true },
     ingredients_text: { type: 'STRING', nullable: true },
     allergens: { type: 'ARRAY', items: { type: 'STRING' } },
@@ -41,6 +42,11 @@ const LABEL_SCHEMA = {
     contains_gelatin: BOOL,
     halal_certified: BOOL,
     kosher_certified: BOOL,
+    supplement_facts: { type: 'ARRAY', nullable: true, items: { type: 'OBJECT', properties: { name: { type: 'STRING' }, amount: { type: 'NUMBER' }, unit: { type: 'STRING' } } } },
+    serving_size: { type: 'STRING', nullable: true },
+    serving_grams: NUM,
+    servings_per_day: NUM,
+    proprietary_blends: { type: 'ARRAY', nullable: true, items: { type: 'STRING' } },
   },
   required: ['product_name', 'ingredients_text', 'allergens', 'traces', 'nutriments'],
 };
@@ -62,6 +68,22 @@ const num = (v: unknown): number | undefined => {
 const bool = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined);
 
 /** Converts the model's JSON into the same product shape Open Food Facts lookups produce. */
+function supplementFromPhoto(j: Record<string, any>): SupplementInfo {
+  const facts = (Array.isArray(j.supplement_facts) ? j.supplement_facts : [])
+    .map((f: any) => ({ name: typeof f?.name === 'string' ? f.name.trim() : '', amount: Number(f?.amount), unit: typeof f?.unit === 'string' ? f.unit.trim() : '' }))
+    .filter((f: { name: string; amount: number; unit: string }) => f.name && f.unit && Number.isFinite(f.amount) && f.amount > 0)
+    .slice(0, 80);
+  const perDay = Number(j.servings_per_day);
+  const grams = Number(j.serving_grams);
+  return {
+    serving: typeof j.serving_size === 'string' && j.serving_size.trim() ? j.serving_size.trim().slice(0, 40) : undefined,
+    servingGrams: Number.isFinite(grams) && grams > 0 ? grams : undefined,
+    perDay: Number.isFinite(perDay) && perDay >= 1 ? Math.min(12, Math.round(perDay)) : 1,
+    facts,
+    blends: (Array.isArray(j.proprietary_blends) ? j.proprietary_blends : []).filter((b: unknown): b is string => typeof b === 'string' && !!b.trim()).slice(0, 10),
+  };
+}
+
 export function mapPhotoJson(j: Record<string, any>): ProductData {
   // Tolerate other spellings of the nutrition block (models have answered with "nutriments_per_100g").
   const nutriKey = Object.keys(j).find((k) => /^nutri/i.test(k) && j[k] && typeof j[k] === 'object');
@@ -101,6 +123,9 @@ export function mapPhotoJson(j: Record<string, any>): ProductData {
       halalCertified: bool(j.halal_certified),
       kosherCertified: bool(j.kosher_certified),
     },
+    kind: j.product_type === 'supplement' ? 'supplement' : j.product_type === 'cosmetic' ? 'beauty' : /^(dog|cat|pet)_food$/.test(j.product_type) ? 'petfood' : 'food',
+    supplement: j.product_type === 'supplement' ? supplementFromPhoto(j) : undefined,
+    categories: j.product_type === 'dog_food' ? ['dog-food'] : j.product_type === 'cat_food' ? ['cat-food'] : undefined,
     source: 'photo',
   };
 }

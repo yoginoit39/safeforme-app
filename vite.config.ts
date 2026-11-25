@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vitest/config';
 
 // Production-only Content-Security-Policy: the browser itself refuses any
-// network call that is not Open Food Facts or Google's Gemini API host.
+// network call that is not one of the product databases or Google's Gemini API host.
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
@@ -11,7 +11,7 @@ const CSP = [
   "style-src 'self'",
   "img-src 'self' data: blob: https:",
   "media-src 'self' blob:",
-  'connect-src https://world.openfoodfacts.org https://generativelanguage.googleapis.com',
+  'connect-src https://world.openfoodfacts.org https://search.openfoodfacts.org https://world.openbeautyfacts.org https://world.openpetfoodfacts.org https://api.nal.usda.gov https://api.ods.od.nih.gov https://api.fda.gov https://generativelanguage.googleapis.com',
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'none'",

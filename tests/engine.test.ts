@@ -75,7 +75,7 @@ describe('verdict: allergens', () => {
 });
 
 describe('verdict: missing data', () => {
-  it("no ingredients and no allergen tags → CAN'T CONFIRM, even with an empty profile", () => {
+  it("no ingredients and no allergen tags → CHECK THE LABEL, even with an empty profile", () => {
     expect(computeVerdict(product({}), EMPTY_PROFILE).level).toBe('unknown');
     expect(computeVerdict(product({ ingredientsText: '   ' }), profile({ allergies: ['milk'] })).level).toBe('unknown');
   });
@@ -87,7 +87,7 @@ describe('verdict: missing data', () => {
 });
 
 describe('verdict: rules', () => {
-  it("halal + no certification + clean ingredients → CAN'T CONFIRM", () => {
+  it("halal + no certification + clean ingredients → CHECK THE LABEL", () => {
     const v = computeVerdict(oats, profile({ rules: ['halal'] }));
     expect(v.level).toBe('unknown');
     expect(v.reasons[0]).toMatch(/No halal certification found/);
@@ -109,7 +109,7 @@ describe('verdict: rules', () => {
     expect(computeVerdict(product({ ingredientsText: 'white wine vinegar, salt' }), profile({ rules: ['halal'] })).level).toBe('unknown');
   });
 
-  it("halal + gelatin of unknown source → CAN'T CONFIRM naming gelatin", () => {
+  it("halal + gelatin of unknown source → CHECK THE LABEL naming gelatin", () => {
     const v = computeVerdict(product({ ingredientsText: 'glucose syrup, sugar, gelatine' }), profile({ rules: ['halal'] }));
     expect(v.level).toBe('unknown');
     expect(v.reasons[0]).toMatch(/gelatine of unknown source/);
@@ -141,12 +141,38 @@ describe('score', () => {
     expect(computeVerdict(oats, EMPTY_PROFILE).level).toBe('safe');
   });
 
-  it('diabetes drops cola with the sugar-watch reason; verdict stays SAFE', () => {
+  it('diabetes + cola: the score drops AND the verdict is "not ideal", never SAFE', () => {
     const base = computeScore(cola, EMPTY_PROFILE)!.value;
     const s = computeScore(cola, profile({ watch: ['diabetes'] }))!;
     expect(s.value).toBe(base - 10);
     expect(s.reasons.join(' ')).toMatch(/high sugar for your sugar watch/);
-    expect(computeVerdict(cola, profile({ watch: ['diabetes'] })).level).toBe('safe');
+    const v = computeVerdict(cola, profile({ watch: ['diabetes'] }));
+    expect(v.level).toBe('caution');
+    expect(v.reasons[0]).toBe('High in sugar for diabetes — 10.6g per 100g, about 2.5 teaspoons.');
+    // Someone with no sugar watch still gets SAFE; so does a diabetic with plain oats.
+    expect(computeVerdict(cola, EMPTY_PROFILE).level).toBe('safe');
+    expect(computeVerdict(oats, profile({ watch: ['diabetes'] })).level).toBe('safe');
+  });
+
+  it('low salt, cholesterol and low carb needs also turn SAFE into "not ideal"', () => {
+    const p = product({ ingredientsText: 'potatoes, oil, salt', nutriments: { salt: 1.8, saturatedFat: 12, carbs: 55 } });
+    expect(computeVerdict(p, profile({ watch: ['low-salt'] })).reasons[0]).toMatch(/Very salty for a low-salt diet — 1.8g/);
+    expect(computeVerdict(p, profile({ watch: ['cholesterol'] })).level).toBe('caution');
+    expect(computeVerdict(p, profile({ watch: ['low-carb'] })).level).toBe('caution');
+    expect(computeVerdict(p, EMPTY_PROFILE).level).toBe('safe');
+  });
+
+  it('an allergy still wins over a health need', () => {
+    const v = computeVerdict(cookies, profile({ allergies: ['peanuts'], watch: ['diabetes'] }));
+    expect(v.level).toBe('not-safe');
+  });
+
+  it('an ingredient the user typed into their avoid list is caught as a whole word', () => {
+    const drink = product({ ingredientsText: 'water, citric acid, sucralose, flavouring' });
+    const v = computeVerdict(drink, profile({ avoidCustom: ['sucralose'] }));
+    expect(v.level).toBe('caution');
+    expect(v.reasons[0]).toBe('Contains sucralose — you chose to avoid it.');
+    expect(computeVerdict(drink, profile({ avoidCustom: ['rice'] })).level).toBe('safe'); // not inside "citric"
   });
 
   it('diabetes + peanut cookies → score 0, clamped', () => {
@@ -206,7 +232,7 @@ describe('data mapping', () => {
     expect(computeVerdict(p, profile({ allergies: ['tree-nuts'] })).reasons[0]).toBe('May contain traces of tree nuts.');
   });
 
-  it("an unreadable photo is CAN'T CONFIRM, never SAFE", () => {
+  it("an unreadable photo is CHECK THE LABEL, never SAFE", () => {
     const p = mapPhotoJson({ product_name: null, ingredients_text: null, allergens: [] });
     expect(computeVerdict(p, EMPTY_PROFILE).level).toBe('unknown');
   });

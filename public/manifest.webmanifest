@@ -2,7 +2,7 @@
   "id": "./",
   "name": "Greenlit",
   "short_name": "Greenlit",
-  "description": "Scan food. See if it is safe for you, with a personal health score.",
+  "description": "Scan food, cosmetics and pet food. See if it is safe for you, your family and your pets.",
   "lang": "en",
   "dir": "ltr",
   "categories": ["food", "health", "lifestyle"],

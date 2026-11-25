@@ -450,8 +450,93 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
     }
   }
 
+  // 4b. Allergy guard. A wrong "safe" is the one mistake this app must not make, and the data is
+  // typed in by volunteers from a pack that may since have changed. So for anyone with an allergy,
+  // a clean result is only given when the list could really be checked, and it never says "safe".
+  const needs = allergyNeeds(profile);
+  if (needs.length && hasText && !notSafe.length && !unknown.length && product.source !== 'demo') {
+    const langs = product.ingredientLangs;
+    if (langs?.length && !langs.some((l) => CHECKED_LANGS.has(l))) {
+      unknown.push(`The ingredient list is only available in ${langName(langs[0])}, which Greenlit can't check reliably for ${listOf(needs)}. Read the pack.`);
+    } else if (product.unknownShare !== undefined && product.unknownShare > 0.6) {
+      unknown.push(`The database's ingredient list for this product is garbled or incomplete, so ${listOf(needs)} can't be ruled out. Read the pack.`);
+    } else if (product.dataDate && Date.now() - product.dataDate > 5 * YEAR) {
+      unknown.push(`This entry was last refreshed in ${new Date(product.dataDate).getFullYear()}. Recipes change, so ${listOf(needs)} can't be ruled out. Read the pack.`);
+    }
+  }
+  if (needs.length && hasText && !notSafe.length && !unknown.length) {
+    const when = product.dataDate ? `, last refreshed ${monthYear(product.dataDate)}` : '';
+    warnings.unshift(
+      fromPhoto
+        ? 'Read from your photo by AI, which can misread small print. Check the words on the pack yourself.'
+        : `From a volunteer database${when}, not from the pack in your hand. Makers change recipes: read the pack every time.`,
+    );
+  }
+
   // 5. Result.
   if (notSafe.length) return { level: 'not-safe', reasons: [...notSafe, ...unknown], warnings };
   if (unknown.length) return { level: 'unknown', reasons: unknown, warnings };
+  // Nothing unsafe. But "safe" would be the wrong word for a sugary drink and a diabetic,
+  // or for a product with something the user chose to avoid.
+  const concerns = [...healthConcerns(product, profile), ...customAvoidHits(product, profile)];
+  const avoid = warnings.filter((w) => w.endsWith('on your avoid list.'));
+  if (concerns.length || avoid.length) {
+    return { level: 'caution', reasons: [...concerns, ...avoid], warnings: warnings.filter((w) => !avoid.includes(w)) };
+  }
+  if (needs.length && hasText) {
+    return { level: 'safe', reasons: [`${capital(listOf(needs))} ${needs.length > 1 ? 'are' : 'is'} not in the ingredient list or the allergen tags${fromPhoto ? ' read from your photo' : ''}.`], warnings };
+  }
   return { level: 'safe', reasons: ['No problems found for your profile.'], warnings };
+}
+
+const YEAR = 365 * 24 * 60 * 60 * 1000;
+/** Languages the allergen word lists cover. Anything else can't be called clean. */
+const CHECKED_LANGS = new Set(['en', 'fr', 'de', 'es', 'it']);
+const LANG_NAMES: Record<string, string> = { pl: 'Polish', ar: 'Arabic', hi: 'Hindi', nl: 'Dutch', pt: 'Portuguese', ru: 'Russian', tr: 'Turkish', zh: 'Chinese', ja: 'Japanese', ko: 'Korean', sv: 'Swedish', da: 'Danish', fi: 'Finnish', cs: 'Czech', el: 'Greek', hu: 'Hungarian', ro: 'Romanian', th: 'Thai', id: 'Indonesian', he: 'Hebrew', uk: 'Ukrainian', bg: 'Bulgarian', nb: 'Norwegian' };
+const langName = (code: string) => LANG_NAMES[code] ?? 'a language';
+const monthYear = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const listOf = (items: string[]) => (items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`);
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** The things in a profile where a wrong "safe" could cause a reaction. */
+export function allergyNeeds(profile: Profile): string[] {
+  const out = profile.allergies.map((id) => ALLERGENS.find((a) => a.id === id)?.label ?? id);
+  if (profile.rules.includes('celiac') && !profile.allergies.includes('gluten')) out.push('gluten');
+  if (profile.rules.includes('lactose') && !profile.allergies.includes('milk')) out.push('lactose');
+  return out;
+}
+
+const amount = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(n < 1 ? 2 : 1).replace(/\.?0+$/, ''));
+
+/**
+ * Health needs in the profile (diabetes, low salt, cholesterol, low carb) checked against the
+ * nutrition per 100g. Same thresholds as the personal score, so the two never disagree.
+ */
+export function healthConcerns(product: ProductData, profile: Profile): string[] {
+  const n = product.nutriments ?? {};
+  const watch = new Set(profile.watch);
+  const out: string[] = [];
+  if ((watch.has('diabetes') || watch.has('low-sugar')) && n.sugars !== undefined && n.sugars > 5) {
+    const spoons = Math.round((n.sugars / 4) * 2) / 2;
+    out.push(`${n.sugars > 15 ? 'Very high' : 'High'} in sugar for ${watch.has('diabetes') ? 'diabetes' : 'your low-sugar goal'} — ${amount(n.sugars)}g per 100g, about ${amount(spoons)} teaspoon${spoons === 1 ? '' : 's'}.`);
+  }
+  if (watch.has('low-salt') && n.salt !== undefined && n.salt > 0.6) {
+    out.push(`${n.salt > 1.5 ? 'Very salty' : 'Salty'} for a low-salt diet — ${amount(n.salt)}g salt per 100g.`);
+  }
+  if (watch.has('cholesterol') && n.saturatedFat !== undefined && n.saturatedFat > 5) {
+    out.push(`${n.saturatedFat > 10 ? 'Very high' : 'High'} in saturated fat for your cholesterol — ${amount(n.saturatedFat)}g per 100g.`);
+  }
+  if (watch.has('low-carb') && n.carbs !== undefined && n.carbs > 20) {
+    out.push(`${n.carbs > 50 ? 'Very high' : 'High'} in carbs for a low-carb diet — ${amount(n.carbs)}g per 100g.`);
+  }
+  return out;
+}
+
+/** Ingredients the user typed into their own avoid list. */
+export function customAvoidHits(product: ProductData, profile: Profile): string[] {
+  const text = (product.ingredientsText ?? '').toLowerCase();
+  if (!text) return [];
+  return (profile.avoidCustom ?? [])
+    .filter((term) => term.length >= 2 && findTerm(text, { terms: [term] }))
+    .map((term) => `Contains ${term} — you chose to avoid it.`);
 }

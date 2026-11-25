@@ -42,12 +42,17 @@ test('barcode → verdict → score, for each kind of answer', async ({ page }, 
   await audit(page, info, '04-result-not-safe');
 
   await lookup(page, '8076800195057');
-  await expect(page.locator('.verdict__title')).toHaveText('Safe for you');
+  // An allergy is in the profile: the app reports what it checked and never promises "safe".
+  await expect(page.locator('.verdict__title')).toHaveText('No allergens found');
+  await expect(page.locator('.verdict__reasons')).toContainText('Tree nuts is not in the ingredient list');
+  await expect(page.locator('.verdict__warning').first()).toContainText('read the pack every time');
+  await expect(page.locator('.verdict__action')).toContainText('Check against my pack');
   await expect(page.locator('#score-num')).toHaveText('90');
   await audit(page, info, '05-result-safe');
 
   await lookup(page, '2222222222222');
-  await expect(page.locator('.verdict__title')).toHaveText('Can’t confirm');
+  await expect(page.locator('.verdict__title')).toHaveText('Check the label');
+  await expect(page.locator('.verdict__action')).toBeVisible();
   await expect(page.locator('.score__none')).toBeVisible();
   await audit(page, info, '06-result-no-data');
 
@@ -88,7 +93,7 @@ test('home with history, history filters, settings, key guide', async ({ page },
   await page.locator('[data-action="history-filter"][data-filter="safe"]').click();
   await expect(page.locator('.hist')).toHaveCount(1);
   await page.locator('.hist').first().click();
-  await expect(page.locator('.verdict__title')).toHaveText('Safe for you');
+  await expect(page.locator('.verdict__title')).toHaveText('No allergens found');
 
   await page.locator('.nav__item[data-view="settings"]').click();
   await audit(page, info, '12-settings');
@@ -233,4 +238,199 @@ test('label photo with a key → verdict; key only goes to Google', async ({ pag
   await audit(page, info, '17-result-from-photo');
   expect(seen.length).toBeGreaterThan(0);
   expect(seen.every((s) => s.host === 'generativelanguage.googleapis.com')).toBe(true);
+});
+
+test('family, pets, cosmetics, pet food and search by name', async ({ page }, info) => {
+  await seed(page, { allergies: ['peanuts'], rules: [], watch: [], goal: 'none', skin: ['fragrance'] });
+  await open(page, info);
+
+  // Add a person with their own allergy.
+  await page.locator('.nav__item[data-view="profile"]').click();
+  await page.locator('[data-action="member-add"][data-kind="person"]').click();
+  await page.locator('#member-name').fill('Aisha');
+  await page.locator('.opt', { hasText: /^\s*Milk\s*$/ }).click();
+  await page.locator('form[data-form="profile"] button[type=submit]').click();
+  await expect(page.locator('.notice')).toContainText('Aisha saved');
+  await audit(page, info, '20-family-person');
+
+  // Add a pet: its own group, its own short form.
+  await page.locator('[data-action="member-add"][data-kind="dog"]').click();
+  await page.locator('#member-name').fill('Rex');
+  await page.locator('form[data-form="profile"] button[type=submit]').click();
+  await expect(page.locator('.members__group').nth(1)).toContainText('Rex');
+  await audit(page, info, '21-family-pet');
+
+  // It survives a reload.
+  await page.reload();
+  await page.locator('.nav__item[data-view="profile"]').click();
+  await expect(page.locator('.members .chip', { hasText: 'Aisha' })).toBeVisible();
+
+  // One food scan, checked for everyone. Nutella has milk (Aisha) and cocoa (Rex), but no peanuts.
+  await lookup(page, '3017620422003');
+  await expect(page.locator('.fam__row', { hasText: 'Aisha' })).toContainText('Not safe');
+  await expect(page.locator('.fam__row', { hasText: 'Rex (dog)' })).toContainText('Not safe');
+  await expect(page.locator('.fam__row', { hasText: 'Rex (dog)' })).toContainText('chocolate');
+  await audit(page, info, '22-result-family');
+
+  // Cosmetics: found in the beauty database, no score, flagged ingredients with sources.
+  await lookup(page, '3600000000017');
+  await expect(page.locator('.verdict__title')).toHaveText('Not safe');
+  await expect(page.locator('.verdict__reasons')).toContainText('fragrance allergy');
+  await expect(page.locator('#score-num')).toHaveCount(0);
+  await expect(page.locator('.notable')).toContainText('Lilial');
+  await expect(page.locator('.notable')).toContainText('EU Regulation 2021/1902');
+  await expect(page.locator('.legal')).toContainText('Open Beauty Facts');
+  await audit(page, info, '23-result-cosmetics');
+
+  // Pet food: judged for the pet, not the person.
+  await lookup(page, '7600000000012');
+  await expect(page.locator('.verdict__title')).toHaveText('Safe for your pet');
+  await expect(page.locator('.legal')).toContainText('Not veterinary advice');
+  await expect(page.locator('.legal')).toContainText('Open Pet Food Facts');
+  await audit(page, info, '24-result-petfood');
+
+  // Search by name: one list across food, cosmetics and pet food; tapping a hit runs the normal check.
+  await lookup(page, 'cream');
+  await expect(page.locator('.search .hist')).toHaveCount(3);
+  await audit(page, info, '25-search-results');
+  await page.locator('.search .hist', { hasText: 'Radiance Night Cream' }).click();
+  await expect(page.locator('.product__name')).toHaveText('Radiance Night Cream');
+
+  await lookup(page, 'zzzz');
+  await expect(page.locator('.notice')).toContainText('Nothing found');
+
+  // Removing a member works.
+  await page.locator('.nav__item[data-view="profile"]').click();
+  await page.locator('.members .chip', { hasText: 'Rex' }).click();
+  await page.locator('[data-action="member-remove"]').click();
+  await expect(page.locator('.members .chip', { hasText: 'Rex' })).toHaveCount(0);
+});
+
+
+/**
+ * The complaint that fills other scanner apps' reviews: "scans one item, then I have to close the
+ * app to scan the next". These tests scan product after product without ever reloading.
+ */
+const fakeCamera = () => {
+  const L = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'];
+  const G = L.map((c) => [...c].reverse().map((b) => (b === '1' ? '0' : '1')).join(''));
+  const R = L.map((c) => [...c].map((b) => (b === '1' ? '0' : '1')).join(''));
+  const P = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
+  const w = window as any;
+  w.__bits = '';
+  w.__streams = [];
+  w.__hang = false;
+  w.__setCode = (code: string) => {
+    if (!code) { w.__bits = ''; return; }
+    const d = [...code].map(Number);
+    let bits = '101';
+    for (let i = 1; i <= 6; i++) bits += (P[d[0]][i - 1] === 'L' ? L : G)[d[i]];
+    bits += '01010';
+    for (let i = 7; i <= 12; i++) bits += R[d[i]];
+    w.__bits = bits + '101';
+  };
+  const fake = () => {
+    if (w.__hang) return new Promise(() => undefined); // a camera that never answers
+    const c = document.createElement('canvas');
+    c.width = 1280; c.height = 720;
+    const ctx = c.getContext('2d')!;
+    let n = 0;
+    const draw = () => {
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, 4, 4 + (n++ % 2)); // keeps the picture changing, like a real camera
+      const bits: string = w.__bits;
+      const m = 6, x0 = (c.width - bits.length * m) / 2;
+      [...bits].forEach((b, i) => { if (b === '1') ctx.fillRect(x0 + i * m, 240, m, 240); });
+    };
+    draw(); setInterval(draw, 100);
+    const stream = c.captureStream(10);
+    w.__streams.push(stream);
+    return Promise.resolve(stream);
+  };
+  Object.defineProperty(navigator, 'mediaDevices', { value: { getUserMedia: fake }, configurable: true });
+  Object.defineProperty(window, 'BarcodeDetector', { value: undefined, configurable: true });
+};
+const camerasStillOn = (page: import('@playwright/test').Page) =>
+  page.evaluate(() => (window as any).__streams.filter((s: MediaStream) => s.getTracks().some((t) => t.readyState === 'live')).length);
+
+test('scanner: four products in a row, no restart needed, camera released every time', async ({ page }, info) => {
+  await seed(page);
+  await page.addInitScript(fakeCamera);
+  await open(page, info);
+
+  const scan = async (code: string, name: string, how: 'scan-start' | 'scan-next') => {
+    await page.evaluate((c) => (window as any).__setCode(c), code);
+    await page.locator(`[data-action="${how}"]`).click();
+    await expect(page.locator('.product__name')).toHaveText(name, { timeout: 20_000 });
+    expect(await camerasStillOn(page), 'camera must be released after a scan').toBe(0);
+  };
+  await scan('5449000000996', 'Coca-Cola Original', 'scan-start');
+  await scan('3017620422003', 'Nutella', 'scan-next');
+  await scan('8076800195057', 'Spaghetti Nº5', 'scan-next');
+  await scan('5449000000996', 'Coca-Cola Original', 'scan-next'); // the same product again
+  expect(await page.evaluate(() => (window as any).__streams.length)).toBe(4); // a fresh camera each time
+});
+
+test('scanner: survives the screen being redrawn mid-scan, and cancel then scan again works', async ({ page }, info) => {
+  await seed(page);
+  await page.addInitScript(fakeCamera);
+  await open(page, info);
+
+  // A slow answer that lands mid-scan: ask for healthier options, then tap "Scan next" before it arrives.
+  await page.route('https://world.openfoodfacts.org/api/v2/search**', async (route) => {
+    await new Promise((r) => setTimeout(r, 2500));
+    await route.fulfill({ json: { products: [] } });
+  });
+  await lookup(page, '3017620422003');
+  await page.locator('[data-action="alts-load"]').click();
+  await page.locator('[data-action="scan-next"]').click();
+  await expect(page.locator('.scanner')).toBeVisible();
+  const firstBox = await page.locator('#scan-video').elementHandle();
+  // The answer arrives and the app redraws: the video box on screen is now a different one.
+  await expect.poll(() => page.evaluate((old) => document.getElementById('scan-video') !== old, firstBox), { timeout: 15_000 }).toBe(true);
+  await expect(page.locator('.scanner')).toBeVisible();
+  // The live picture must have moved into the NEW box, or the scan can never finish.
+  // Checked straight away: a viewfinder that goes black for seconds is a broken scanner to the person holding it.
+  await expect.poll(() => page.evaluate(() => !!(document.getElementById('scan-video') as HTMLVideoElement)?.srcObject), { timeout: 1500 }).toBe(true);
+  await page.evaluate(() => (window as any).__setCode('5449000000996'));
+  await expect(page.locator('.product__name')).toHaveText('Coca-Cola Original', { timeout: 20_000 });
+  expect(await camerasStillOn(page)).toBe(0);
+
+  // Cancel half-way, then scan again straight away.
+  await page.evaluate(() => (window as any).__setCode(''));
+  await page.locator('[data-action="scan-next"]').click();
+  await expect(page.locator('.scanner')).toBeVisible();
+  await page.locator('[data-action="scan-stop"]').click();
+  await expect(page.locator('.scanner')).toHaveCount(0);
+  expect(await camerasStillOn(page)).toBe(0);
+  await page.evaluate(() => (window as any).__setCode('8076800195057'));
+  await page.locator('[data-action="scan-start"]').click();
+  await expect(page.locator('.product__name')).toHaveText('Spaghetti Nº5', { timeout: 20_000 });
+});
+
+test('scanner: a slow read offers help, and a camera that never answers does not hang the app', async ({ page }, info) => {
+  await seed(page);
+  await page.addInitScript(fakeCamera);
+  await open(page, info);
+
+  // Nothing readable in view: after a few seconds the app offers a way out instead of sitting there.
+  await page.locator('[data-action="scan-start"]').click();
+  await expect(page.locator('#scan-help')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#scan-help-text')).toContainText('Not reading it?');
+  await audit(page, info, '23-scanner-help');
+  await page.locator('[data-action="scan-type"]').click();
+  await expect(page.locator('.scanner')).toHaveCount(0);
+  await expect(page.locator('#barcode-input')).toBeFocused();
+  expect(await camerasStillOn(page)).toBe(0);
+
+  // The camera never answers at all.
+  await page.evaluate(() => { (window as any).__hang = true; });
+  await page.locator('[data-action="scan-start"]').click();
+  await expect(page.locator('.notice')).toContainText('The camera didn’t open', { timeout: 15_000 });
+  await expect(page.locator('.scanner')).toHaveCount(0);
+
+  // And the very next scan works.
+  await page.evaluate(() => { (window as any).__hang = false; (window as any).__setCode('8076800195057'); });
+  await page.locator('[data-action="scan-start"]').click();
+  await expect(page.locator('.product__name')).toHaveText('Spaghetti Nº5', { timeout: 20_000 });
 });

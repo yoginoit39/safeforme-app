@@ -124,11 +124,11 @@ describe('new profile options', () => {
     expect(computeVerdict(product({ ingredientsText: 'celeriac, lupin flour' }), profile({ allergies: ['celery', 'lupin'] })).reasons).toHaveLength(2);
   });
 
-  it('avoid list: a warning and score points, never "not safe"', () => {
+  it('avoid list: "not ideal" and score points, never "not safe" and never plain "safe"', () => {
     const p = profile({ watch: ['no-palm-oil', 'no-additives'] });
     const v = computeVerdict(spread, p);
-    expect(v.level).toBe('safe');
-    expect(v.warnings.join(' ')).toMatch(/palm oil.*avoid list/);
+    expect(v.level).toBe('caution');
+    expect(v.reasons.join(' ')).toMatch(/palm oil.*avoid list/);
     expect(computeScore(spread, p)!.value).toBe(0); // 15 − 10 − 10, clamped
     expect(computeScore(oats, p)!.value).toBe(90);
   });

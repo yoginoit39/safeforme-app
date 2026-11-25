@@ -29,6 +29,9 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build
+        env:
+          # Free USDA FoodData Central key (read-only public food data). Without it the US database is skipped.
+          VITE_USDA_KEY: ${{ secrets.VITE_USDA_KEY }}
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist

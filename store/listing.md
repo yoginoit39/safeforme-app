@@ -3,20 +3,30 @@
 Paste these into Play Console. Name is still the working name.
 
 ## App name (max 30)
-Greenlit: Food Scanner
+Greenlit: Food & Beauty Scanner
 
 ## Short description (max 80)
-Scan food. See if it's safe for your allergies, diet and health goals.
+Scan food, cosmetics & pet food. See if it's safe for you, family and pets.
 
 ## Full description (max 4000)
-Is this food safe for YOU?
+Is this safe for YOU?
 
-Most food scanners give everyone the same score. Greenlit gives you an answer made for you.
+Most scanners give everyone the same score. Greenlit gives you an answer made for you.
 
-Tell it once what to watch for — allergies, halal, kosher, vegan, vegetarian, pregnancy, diabetes, low salt, or a goal like losing weight. Then scan any barcode and get two answers in a second:
+Tell it once what to watch for — allergies, halal, kosher, vegan, vegetarian, pregnancy, diabetes, low salt, or a goal like losing weight. Then scan any barcode, or search by name, and get two answers in a second:
 
-• A clear verdict: Safe for you, Not safe, or Can't confirm — with the exact reason, in plain words.
-• A personal health score from 0 to 100, with every point explained.
+• A clear verdict: Safe for you, Not safe, or Check the label — with the exact reason, in plain words.
+• For food, a personal health score from 0 to 100, with every point explained.
+
+FOR THE WHOLE FAMILY
+• Add family members, each with their own allergies and diet. One scan shows an answer for every person.
+• Add your dog or cat. Every food you scan is checked for ingredients that are toxic to pets, such as chocolate, xylitol, grapes and onion (source: ASPCA Animal Poison Control).
+• Scan pet food to check it suits your pet.
+
+COSMETICS TOO
+• Scan creams, shampoo, make-up and more. See which ingredients regulators have banned or restricted, with the source named. No made-up scores.
+• Flags mercury, hydroquinone and strong steroids in skin-lightening creams.
+• Set a fragrance allergy, sensitive skin, or avoid parabens, sulfates, alcohol and silicones.
 
 UNDERSTAND WHAT YOU'RE EATING
 • A plain-language "Why" for every product: added sugars, palm oil, sweeteners, additives, and what the product is mostly made of.
@@ -28,12 +38,12 @@ Allergies (peanuts, tree nuts, milk, egg, soy, wheat/gluten, fish, shellfish, se
 
 WHY IT'S DIFFERENT
 • Personal, not generic. The same product can be fine for one person and unsafe for another.
-• Honest. If a product's ingredients are missing, the app says "Can't confirm" — never a false "Safe".
+• Honest. If a product's ingredients are missing, the app says "Check the label" — never a false "Safe".
 • Halal and kosher handled carefully: only certified products show Safe.
 • Catches "may contain traces" warnings for allergies.
 
 FREE AI EXTRAS (OPTIONAL)
-• No barcode? Photograph the ingredients list in any language and get the same verdict and score.
+• No barcode? Photograph the ingredients list in any language and get the same verdict.
 • Tap for a plain-English AI explanation of the ingredients.
 These use Google's AI with your own free key; the app walks you through setting it up in about a minute. Your profile is never sent.
 
@@ -46,9 +56,9 @@ FREE, AND STAYING FREE
 No subscriptions and no paid features. Barcode scanning is unlimited.
 
 IMPORTANT
-Greenlit is an information tool, not a medical device, and does not give medical advice. Product data comes from Open Food Facts, a volunteer-run database, and can be incomplete or wrong. Always read the physical label before eating, especially if you have an allergy or a medical condition.
+Greenlit is an information tool, not a medical device, and does not give medical or veterinary advice. Product data comes from volunteer-run and public databases and can be incomplete or wrong. Always read the physical label before using a product, especially if you have an allergy or a medical condition. For pets, ask your vet.
 
-Product data: Open Food Facts (ODbL).
+Product data: Open Food Facts, Open Beauty Facts, Open Pet Food Facts (ODbL) and USDA FoodData Central.
 
 ## Category
 Food & Drink (alternative: Health & Fitness)
