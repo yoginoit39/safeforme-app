@@ -243,3 +243,81 @@ describe('data mapping', () => {
     expect(normalizeAllergenName('Sesame seeds')).toBe('sesame-seeds');
   });
 });
+
+describe('a product with no ingredient list is still read by its name and category', () => {
+  const bare = (name: string, categories: string[] = []) => product({ name, categories, ingredientsText: undefined });
+  const veg = profile({ rules: ['vegetarian'] });
+  const vegan = profile({ rules: ['vegan'] });
+
+  it('vegetarian: "pork sausages" and "beef jerky" are flagged, not left as "check the label"', () => {
+    // The two real entries that came back "Check the label" for a vegetarian.
+    const sausages = computeVerdict(bare('Original pork sausages', ['meats-and-their-products', 'sausages']), veg);
+    expect(sausages.level).toBe('not-safe');
+    expect(sausages.reasons[0]).toBe('Sold as “pork” (from its name or category) — not vegetarian.');
+    expect(computeVerdict(bare('Beef Cake jerky'), veg).level).toBe('not-safe');
+    expect(computeVerdict(bare('Smoked salmon slices', ['seafood', 'fishes']), veg).level).toBe('not-safe');
+    // The category alone is enough.
+    expect(computeVerdict(bare('Classic recipe', ['meats', 'prepared-meats', 'hams']), veg).level).toBe('not-safe');
+  });
+
+  it('vegan: cheese, yogurt, eggs and honey by name', () => {
+    for (const name of ['Mature cheddar cheese', 'Greek yogurt', 'Free range eggs', 'Clear honey', 'Whole milk']) {
+      expect(computeVerdict(bare(name), vegan).level, name).toBe('not-safe');
+    }
+  });
+
+  it('halal and kosher: pork by name; wine for halal; prawns for kosher', () => {
+    expect(computeVerdict(bare('Smoked bacon rashers'), profile({ rules: ['halal'] })).level).toBe('not-safe');
+    expect(computeVerdict(bare('Red wine', ['alcoholic-beverages', 'wines']), profile({ rules: ['halal'] })).level).toBe('not-safe');
+    expect(computeVerdict(bare('King prawns'), profile({ rules: ['kosher'] })).level).toBe('not-safe');
+  });
+
+  it('allergy: an allergen in the name is a warning when the list is missing', () => {
+    const v = computeVerdict(bare('Crunchy peanut butter'), profile({ allergies: ['peanuts'] }));
+    expect(v.level).toBe('not-safe');
+    expect(v.reasons[0]).toMatch(/The name says “peanut”, which points to peanuts\. The ingredient list isn't in the database/);
+    expect(computeVerdict(bare('Milk chocolate bar'), profile({ allergies: ['milk'] })).level).toBe('not-safe');
+  });
+
+  it('does not mistake look-alikes for the real thing', () => {
+    // Eggs are vegetarian even though the category says "chicken eggs".
+    expect(computeVerdict(bare('Large eggs', ['eggs', 'chicken-eggs']), veg).level).toBe('unknown');
+    // Stand-ins name the thing they replace.
+    for (const name of ['Vegetarian sausages', 'Vegan bacon style rashers', 'Plant-based chicken pieces', 'Meat-free mince', 'Chicken flavour crisps']) {
+      expect(computeVerdict(bare(name), veg).level, name).toBe('unknown');
+    }
+    expect(computeVerdict(bare('Oat milk alternative', ['plant-based-milk-alternatives']), vegan).level).toBe('unknown');
+    expect(computeVerdict(bare('Dairy free coconut yogurt'), vegan).level).toBe('unknown');
+    // Words inside other words.
+    expect(computeVerdict(bare('Hamburger buns'), veg).level).toBe('unknown');
+    expect(computeVerdict(bare('Butter beans'), vegan).level).toBe('unknown');
+    expect(computeVerdict(bare('Ginger beer'), profile({ rules: ['halal'] })).level).toBe('unknown');
+  });
+
+  it('a name never clears a product, and never overrides a full ingredient list', () => {
+    // Nothing in the name: still "check the label", never "nothing flagged".
+    expect(computeVerdict(bare('Family dinner'), veg).level).toBe('unknown');
+    // A name that contradicts the list is never waved through: "Sun Sausage" is really pea protein,
+    // but "Shrimp & cocktail sauce" listed as only its sauce is really shrimp. The app can't tell
+    // which, so it says "check the label" for both rather than risk the second.
+    const sun = product({ name: 'Sun Sausage', categories: ['sausages'], ingredientsText: 'water, yellow pea protein, avocado oil, dried pineapple, spices' });
+    expect(computeVerdict(sun, veg).level).toBe('unknown');
+    const shrimp = product({ name: 'Shrimp & cocktail sauce', ingredientsText: 'tomato paste, water, horseradish, vinegar, salt, spices' });
+    expect(computeVerdict(shrimp, veg).level).toBe('unknown');
+    expect(computeVerdict(shrimp, veg).reasons[0]).toMatch(/The name says “shrimp”, but the ingredient list in the database doesn't mention it/);
+    expect(computeVerdict(shrimp, profile({ rules: ['kosher'] })).reasons.join(' ')).not.toMatch(/No pork or shellfish was found/);
+    // A stand-in that says so in its name is still judged on its list.
+    const veggie = product({ name: 'Vegetarian sausages', ingredientsText: 'water, pea protein, sunflower oil, spices' });
+    expect(computeVerdict(veggie, veg).level).toBe('safe');
+    // No list at all: lactose and coeliac read the name too.
+    expect(computeVerdict(bare('Whole milk', ['dairies', 'milks']), profile({ rules: ['lactose'] })).level).toBe('not-safe');
+    expect(computeVerdict(bare('Wheat crackers'), profile({ rules: ['celiac'] })).level).toBe('not-safe');
+    expect(computeVerdict(bare('Buckwheat noodles'), profile({ rules: ['celiac'] })).level).toBe('unknown');
+    // An ice cream listed as only its wafer is not clean for a milk allergy.
+    const mochi = product({ name: 'Cookies & cream mochi ice cream', ingredientsText: 'sugar, water, sweet rice flour, egg whites, trehalose, corn starch', ingredientLangs: ['en'] });
+    expect(computeVerdict(mochi, profile({ allergies: ['milk'] })).level).toBe('unknown');
+    // And when the list does show meat, the list is what is quoted.
+    const real = product({ name: 'Pork sausages', ingredientsText: 'pork (72%), water, rusk (wheat), salt' });
+    expect(computeVerdict(real, veg).reasons[0]).toMatch(/^Contains /);
+  });
+});

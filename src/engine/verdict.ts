@@ -152,7 +152,7 @@ const GELATIN_UNKNOWN_SOURCE: TermGroup = {
 
 export const MEAT: TermGroup = {
   terms: [
-    'meat', 'beef', 'chicken', 'turkey', 'lamb', 'mutton', 'veal', 'duck', 'goose', 'poultry', 'venison', 'sausage', 'salami', 'tallow', 'suet', 'liver',
+    'meat', 'beef', 'chicken', 'turkey', 'lamb', 'mutton', 'veal', 'duck', 'goose', 'poultry', 'venison', 'sausage', 'salami', 'tallow', 'suet', 'liver', 'jerky', 'steak', 'mince', 'pepperoni', 'chorizo', 'brisket', 'meatballs',
     'viande', 'boeuf', 'bœuf', 'poulet', 'dinde', 'agneau', 'fleisch', 'rindfleisch', 'hähnchen', 'huhn', 'carne', 'pollo', 'manzo',
   ],
   except: ['meat-free', 'meat free'],
@@ -163,6 +163,49 @@ const OTHER_ANIMAL: TermGroup = {
 };
 
 const INSECT_OR_FINING: TermGroup = { terms: ['carmine', 'cochineal', 'e120', 'isinglass', 'collagen'] };
+
+/**
+ * What a product is sold as, read from its own name and its category in the database.
+ * A pack called "pork sausages" is meat even when nobody has typed in its ingredient list.
+ */
+const SOLD_AS_MEAT: TermGroup = {
+  terms: [
+    'meat', 'meats', 'beef', 'pork', 'chicken', 'chickens', 'turkey', 'lamb', 'mutton', 'veal', 'duck', 'goose', 'venison', 'poultry', 'poultries',
+    'sausage', 'sausages', 'ham', 'hams', 'bacon', 'salami', 'pepperoni', 'chorizo', 'prosciutto', 'jerky', 'steak', 'steaks', 'mince', 'minced',
+    'meatballs', 'brisket', 'bratwurst', 'frankfurters', 'hot dogs', 'kebab', 'gammon', 'charcuterie', 'cold cuts', 'pâté', 'pate', 'lard',
+    'viande', 'viandes', 'boeuf', 'bœuf', 'porc', 'poulet', 'jambon', 'saucisse', 'saucisses', 'saucisson', 'fleisch', 'wurst', 'schinken', 'carne', 'pollo', 'jamón',
+  ],
+  except: ['meat free', 'meat-free'],
+};
+const SOLD_AS_FISH: TermGroup = {
+  terms: ['fish', 'fishes', 'seafood', 'tuna', 'salmon', 'sardines', 'sardine', 'mackerel', 'anchovies', 'anchovy', 'cod', 'haddock', 'herring', 'trout', 'shrimp', 'shrimps', 'prawn', 'prawns', 'crab', 'lobster', 'mussels', 'oysters', 'squid', 'caviar', 'poisson', 'poissons', 'thon', 'saumon', 'fisch', 'pescado', 'atún'],
+};
+const SOLD_AS_DAIRY_EGG: TermGroup = {
+  terms: ['milk', 'milks', 'dairy', 'dairies', 'cheese', 'cheeses', 'butter', 'butters', 'cream', 'yogurt', 'yogurts', 'yoghurt', 'yoghurts', 'ghee', 'whey', 'egg', 'eggs', 'honey', 'honeys', 'lait', 'fromage', 'fromages', 'beurre', 'oeufs', 'œufs', 'miel', 'käse', 'milch', 'queso', 'leche'],
+  except: ['cocoa butter', 'shea butter', 'peanut butter', 'almond butter', 'cashew butter', 'nut butter', 'nut butters', 'butter beans', 'butter bean', 'cream of tartar', 'cream soda', 'cream crackers', 'coconut milk', 'coconut cream', 'egg plant', 'eggplant'],
+};
+const SOLD_AS_ALCOHOL: TermGroup = { terms: ['alcoholic beverages', 'wine', 'wines', 'beer', 'beers', 'spirits', 'whisky', 'whiskey', 'vodka', 'rum', 'gin', 'liqueur', 'liqueurs', 'cider', 'ciders', 'champagne', 'sake'], except: ['non alcoholic', 'alcohol free', 'wine vinegar', 'wine vinegars', 'ginger beer', 'root beer'] };
+const FORBIDDEN_PORK: TermGroup = { terms: ['pork', 'bacon', 'ham', 'hams', 'lard', 'prosciutto', 'pancetta', 'gammon', 'chorizo', 'pepperoni', 'salami', 'porc', 'jambon', 'schinken', 'cerdo', 'jamón'] };
+const FORBIDDEN_SHELLFISH: TermGroup = { terms: ['shrimp', 'shrimps', 'prawn', 'prawns', 'crab', 'lobster', 'mussels', 'oysters', 'squid', 'shellfish', 'scampi', 'clams'] };
+const SOLD_AS_DAIRY: TermGroup = { terms: ['milk', 'milks', 'dairy', 'dairies', 'cheese', 'cheeses', 'butter', 'butters', 'cream', 'yogurt', 'yogurts', 'yoghurt', 'yoghurts', 'whey', 'lait', 'fromage', 'fromages', 'beurre', 'käse', 'milch', 'queso', 'leche'], except: SOLD_AS_DAIRY_EGG.except };
+const SOLD_AS_GLUTEN: TermGroup = { terms: ['wheat', 'barley', 'rye', 'spelt', 'semolina', 'couscous', 'bulgur', 'seitan', 'blé', 'weizen', 'trigo'], except: ['buckwheat', 'wheat free', 'gluten free'] };
+/** Made to stand in for an animal product: its name mentions the thing it replaces. */
+const STAND_IN = /\b(vegetarian|vegan|veggie|plant based|meat ?free|meatless|dairy ?free|egg ?free|free from|alternatives?|analogues?|substitutes?|imitation|style|flavou?r(ed|ing)?|végétal\w*|vegetal\w*|vegetarisch\w*)\b/;
+
+/** An allergen word in the product's own name, ignoring stand-ins such as "dairy-free" or "oat milk alternative". */
+function nameHit(name: string | undefined, def: TermGroup): string | null {
+  const n = (name ?? '').toLowerCase();
+  if (!n || STAND_IN.test(n)) return null;
+  return findTerm(n, { terms: def.terms, except: [...(def.except ?? []), 'butter beans', 'butter bean', 'cream soda', 'cream crackers', 'cream cracker', 'cream of tartar', 'butternut', 'buttercup', 'nutmeg', 'coconut', 'doughnut', 'donut', 'chestnut', 'water chestnut'] });
+}
+
+/** The name and categories as plain words, with poultry-named eggs reduced to "eggs". */
+function soldAsText(product: ProductData): string {
+  return `${product.name ?? ''} ${(product.categories ?? []).join(' ')}`
+    .toLowerCase()
+    .replace(/-/g, ' ')
+    .replace(/\b(chicken|hen|duck|quail|goose|free range|barn) eggs?\b/g, 'eggs');
+}
 
 export const CAFFEINE: TermGroup = {
   terms: ['caffeine', 'coffee', 'espresso', 'guarana', 'matcha', 'black tea', 'green tea', 'yerba mate', 'kola nut', 'cola nut', 'caféine', 'café', 'koffein', 'kaffee', 'cafeína', 'caffeina', 'caffè'],
@@ -184,8 +227,9 @@ export const SWEETENERS: TermGroup = {
   ],
 };
 export const PALM_OIL: TermGroup = {
-  terms: ['palm oil', 'palm fat', 'palm kernel oil', 'palm kernel fat', 'palm olein', 'palm stearin', 'palm', 'huile de palme', 'graisse de palme', 'palmöl', 'palmfett', 'aceite de palma', 'olio di palma'],
-  except: ['palm oil free', 'palm-oil-free', 'sans huile de palme', 'no palm oil', 'heart of palm', 'hearts of palm', 'palm sugar'],
+  // Labels often write it as "vegetable oil (rapeseed, palm)", with no "oil" next to "palm".
+  terms: ['palm oil', 'palm fat', 'palm kernel', 'palm kernel oil', 'palmolein', 'palm olein', 'palm stearin', 'palm', 'palme', 'huile de palme', 'graisse de palme', 'palmöl', 'palmfett', 'aceite de palma', 'palma', 'olio di palma'],
+  except: ['palm sugar', 'palm nectar', 'hearts of palm', 'heart of palm', 'palm hearts', 'date palm', 'palm dates', 'coconut palm', 'palm free', 'palm-oil-free', 'palm oil free', 'sans huile de palme', 'no palm oil'],
 };
 export const HYDROGENATED: TermGroup = {
   terms: ['partially hydrogenated', 'hydrogenated', 'partiellement hydrogénée', 'hydrogénée', 'gehärtet', 'hidrogenado', 'hidrogenada', 'idrogenato'],
@@ -321,6 +365,52 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
     }
     if (hasTag(product.traces, def) || findTerm(traceText, def)) {
       notSafe.push(`May contain traces of ${def.label}.`);
+      continue;
+    }
+    // The pack's own name points to this allergen but the list in the database never mentions it:
+    // the list is probably incomplete (an ice cream listed as only its wafer). Not a clean result.
+    const named = hasText ? nameHit(product.name, def) : null;
+    if (named) {
+      unknown.push(`The name says “${named}”, which points to ${def.label}, but the ingredient list in the database doesn't mention it. The list may be incomplete: check the pack.`);
+    }
+  }
+
+  // What the pack is sold as. Used only to flag, never to clear: a name can show a product is
+  // meat, it can never show a product is free of something. And only when the ingredient list is
+  // missing: checked on 489 real products, a full list is the better witness ("Sun Sausage" is
+  // made of pea protein; "Cheese-less thins" have no cheese).
+  const about = soldAsText(product);
+  const standIn = STAND_IN.test(about);
+  const soldAs = (...groups: TermGroup[]): string | null => {
+    if (standIn || hasText) return null;
+    for (const g of groups) {
+      const hit = findTerm(about, g);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  // The list is on file, but the pack's own name says something the list never mentions
+  // ("Shrimp & cocktail sauce" listed as only its sauce). The list is probably incomplete.
+  const nameLower = (product.name ?? '').toLowerCase().replace(/-/g, ' ').replace(/\b(chicken|hen|duck|quail|goose|free range|barn) eggs?\b/g, 'eggs');
+  const nameSays = (...groups: TermGroup[]): string | null => {
+    if (!hasText || STAND_IN.test(nameLower)) return null;
+    for (const g of groups) {
+      const hit = findTerm(nameLower, g);
+      if (hit) return hit;
+    }
+    return null;
+  };
+  const incomplete = (word: string, what: string) =>
+    `The name says “${word}”, but the ingredient list in the database doesn't mention it. The list may be incomplete, so this can't be called ${what}: check the pack.`;
+
+  // With no ingredient list, an allergen in the product's own name is still a warning worth giving.
+  if (!hasText) {
+    const nameOnly = (product.name ?? '').toLowerCase();
+    for (const id of profile.allergies) {
+      const def = allergenById(id);
+      if (!def || notSafe.some((r) => r.includes(def.label))) continue;
+      const hit = nameHit(nameOnly, def);
+      if (hit) notSafe.push(`The name says “${hit}”, which points to ${def.label}. The ingredient list isn't in the database, so check the pack.`);
     }
   }
 
@@ -346,8 +436,14 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
       [allergenById('milk')!, allergenById('egg')!, MEAT, PORK, allergenById('fish')!, allergenById('shellfish')!, GELATIN, OTHER_ANIMAL],
       ['milk', 'egg', 'fish', 'shellfish'],
     );
+    const sold = hits.length ? null : soldAs(SOLD_AS_MEAT, SOLD_AS_FISH, SOLD_AS_DAIRY_EGG);
     if (hits.length) notSafe.push(`Contains ${hits.join(', ')} — not vegan.`);
+    else if (sold) notSafe.push(`Sold as “${sold}” (from its name or category) — not vegan.`);
     else if (!hasText) unverifiable.push('vegan');
+    else {
+      const says = nameSays(SOLD_AS_MEAT, SOLD_AS_FISH, SOLD_AS_DAIRY_EGG);
+      if (says) unknown.push(incomplete(says, 'vegan'));
+    }
   }
 
   if (rules.has('vegetarian')) {
@@ -355,8 +451,14 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
       [MEAT, PORK, allergenById('fish')!, allergenById('shellfish')!, GELATIN, INSECT_OR_FINING],
       ['fish', 'shellfish'],
     );
+    const sold = hits.length ? null : soldAs(SOLD_AS_MEAT, SOLD_AS_FISH);
     if (hits.length) notSafe.push(`Contains ${hits.join(', ')} — not vegetarian.`);
+    else if (sold) notSafe.push(`Sold as “${sold}” (from its name or category) — not vegetarian.`);
     else if (!hasText) unverifiable.push('vegetarian');
+    else {
+      const says = nameSays(SOLD_AS_MEAT, SOLD_AS_FISH);
+      if (says) unknown.push(incomplete(says, 'vegetarian'));
+    }
   }
 
   for (const rule of ['halal', 'kosher'] as const) {
@@ -377,8 +479,17 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
       if (shellfish) forbidden.push(shellfish);
     }
 
+    // The name or category can show pork, alcohol or shellfish even with no ingredient list.
+    const soldForbidden = forbidden.length
+      ? null
+      : soldAs(FORBIDDEN_PORK, rule === 'halal' ? SOLD_AS_ALCOHOL : FORBIDDEN_SHELLFISH);
+
     if (forbidden.length) {
       notSafe.push(`Contains ${forbidden.join(', ')} — not ${rule}.`);
+    } else if (soldForbidden) {
+      notSafe.push(`Sold as “${soldForbidden}” (from its name or category) — not ${rule}.`);
+    } else if (nameSays(FORBIDDEN_PORK, rule === 'halal' ? SOLD_AS_ALCOHOL : FORBIDDEN_SHELLFISH)) {
+      unknown.push(incomplete(nameSays(FORBIDDEN_PORK, rule === 'halal' ? SOLD_AS_ALCOHOL : FORBIDDEN_SHELLFISH)!, rule));
     } else if (certified) {
       // Certified and nothing forbidden found: this rule raises no doubt.
     } else if (!hasText) {
@@ -408,7 +519,9 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
     const milk = allergenById('milk')!;
     const labelled = product.labels.some((l) => /lactose-free|no-lactose|sans-lactose|laktosefrei/.test(l));
     const hit = hasTag(product.allergens, milk) ? 'milk' : findTerm(main, milk);
+    const sold = hit || labelled ? null : soldAs(SOLD_AS_DAIRY);
     if (hit && !labelled) notSafe.push(`Contains ${hit} — a source of lactose.`);
+    else if (sold) notSafe.push(`Sold as “${sold}” (from its name or category) — a source of lactose.`);
     else if (!hit && !hasText) unverifiable.push('lactose');
   }
 
@@ -422,7 +535,9 @@ export function computeVerdict(product: ProductData, profile: Profile): Verdict 
       notSafe.push('May contain traces of gluten — not suitable for coeliac disease.');
     } else if (!labelled) {
       const oats = findTerm(main, OATS);
+      const sold = soldAs(SOLD_AS_GLUTEN);
       if (oats) unknown.push('Contains oats, which are often contaminated with gluten, and no gluten-free label was found in the data.');
+      else if (sold) notSafe.push(`Sold as “${sold}” (from its name or category) — not suitable for coeliac disease.`);
       else if (!hasText) unverifiable.push('celiac');
     }
   }
